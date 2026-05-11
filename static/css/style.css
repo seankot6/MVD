@@ -1,0 +1,31 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.navbar {
+    background: linear-gradient(135deg, #0033a0, #0055cc) !important;
+}
+
+.card {
+    border: none;
+    border-radius: 12px;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+    background: linear-gradient(135deg, #0033a0, #0055cc) !important;
+}
+
+.btn-primary {
+    background: #0033a0;
+    border: none;
+}
+
+.btn-primary:hover {
+    background: #002266;
+}
+
+.form-control:focus {
+    border-color: #0055cc;
+    box-shadow: 0 0 0 0.2rem rgba(0, 51, 160, 0.25);
+}

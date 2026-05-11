@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h4>Подать обращение граждан</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    {{ form.hidden_tag() if form else '' }}
+
+                    <!-- Выбор анонимно или зарегистрироваться -->
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="anonymous" name="anonymous" onchange="toggleFields()">
+                            <label class="form-check-label fw-bold" for="anonymous">Подать обращение анонимно</label>
+                        </div>
+                    </div>
+
+                    <div id="user-fields">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">ФИО <span class="text-danger">*</span></label>
+                                <input type="text" name="full_name" class="form-control" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Телефон <span class="text-danger">*</span></label>
+                                <input type="tel" name="phone" class="form-control" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Адрес проживания</label>
+                            <input type="text" name="address" class="form-control">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Email (необязательно)</label>
+                            <input type="email" name="email" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Текст обращения <span class="text-danger">*</span></label>
+                        <textarea name="appeal_text" class="form-control" rows="6" required placeholder="Опишите вашу проблему..."></textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Прикрепить фото / файл (необязательно)</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*">
+                        <small class="text-muted">Максимум 5 МБ</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Отправить обращение</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
