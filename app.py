@@ -111,15 +111,20 @@ def normalize_phone(phone):
 
 
 def send_email(to_email, subject, body):
+    email_user = os.getenv('EMAIL_USER')
+    email_pass = os.getenv('EMAIL_PASS')
+    if not email_user or not email_pass:
+        print('Ошибка почты: не заданы EMAIL_USER или EMAIL_PASS')
+        return False
     try:
         msg = MIMEMultipart()
-        msg['From'] = os.getenv('EMAIL_USER')
+        msg['From'] = email_user
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
-        server.login(os.getenv('EMAIL_USER'), os.getenv('EMAIL_PASS'))
+        server.login(email_user, email_pass)
         server.send_message(msg)
         server.quit()
         return True
@@ -146,17 +151,21 @@ def generate_email_verify_code():
 def issue_email_verify_code(user):
     user.email_verify_code = generate_email_verify_code()
     user.email_verify_expires = datetime.utcnow() + timedelta(minutes=15)
-    user.email_verified = False
     body = (
         f'Код подтверждения регистрации: {user.email_verify_code}\n\n'
         'Введите его на странице подтверждения email.\n'
         'Код действует 15 минут.'
     )
-    if send_email(user.email, 'Код подтверждения — МО МВД Октябрьский', body):
+    try:
+        if not send_email(user.email, 'Код подтверждения — МО МВД Октябрьский', body):
+            db.session.rollback()
+            return False
         db.session.commit()
         return True
-    db.session.rollback()
-    return False
+    except Exception as e:
+        db.session.rollback()
+        print('Ошибка сохранения кода подтверждения:', e)
+        return False
 
 
 def optional_phone(phone):
@@ -425,17 +434,27 @@ def register():
         user.sync_full_name()
         user.set_password(password)
         db.session.add(user)
-        db.session.flush()
 
-        if is_staff:
-            if not issue_email_verify_code(user):
-                db.session.rollback()
-                flash('Не удалось отправить код на email. Проверьте настройки почты и попробуйте снова.', 'danger')
-                return redirect(url_for('register'))
-            flash('На ваш email отправлен 6-значный код. Введите его для завершения регистрации.', 'info')
-            return redirect(url_for('register_verify', email=email))
+        try:
+            if is_staff:
+                db.session.flush()
+                if not issue_email_verify_code(user):
+                    flash(
+                        'Не удалось завершить регистрацию. Проверьте EMAIL_USER и EMAIL_PASS '
+                        'в настройках Render (Environment) или попробуйте позже.',
+                        'danger',
+                    )
+                    return redirect(url_for('register'))
+                flash('На ваш email отправлен 6-значный код. Введите его для завершения регистрации.', 'info')
+                return redirect(url_for('register_verify', email=email))
 
-        db.session.commit()
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print('Ошибка регистрации:', e)
+            flash('Ошибка при сохранении данных. Попробуйте ещё раз через минуту.', 'danger')
+            return redirect(url_for('register'))
+
         flash('Регистрация успешна. Войдите в личный кабинет.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html')
@@ -522,8 +541,20 @@ def forgot_password():
             user.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
             db.session.commit()
             reset_url = url_for('reset_password', token=token, _external=True)
-            send_email(user.email, 'Сброс пароля — МО МВД Октябрьский', f'Ссылка для сброса пароля:\n{reset_url}\n\nДействует 1 час.')
-        flash('Если аккаунт существует, ссылка для сброса пароля отправлена на email.', 'info')
+            if send_email(
+                user.email,
+                'Сброс пароля — МО МВД Октябрьский',
+                f'Ссылка для сброса пароля:\n{reset_url}\n\nДействует 1 час.',
+            ):
+                flash('Ссылка для сброса пароля отправлена на email. Проверьте также папку «Спам».', 'success')
+            else:
+                flash(
+                    'Аккаунт найден, но письмо не отправлено. На сервере не настроена почта '
+                    '(EMAIL_USER / EMAIL_PASS в Render → Environment). Обратитесь к администратору.',
+                    'danger',
+                )
+        else:
+            flash('Если аккаунт существует, ссылка для сброса пароля отправлена на email.', 'info')
         return redirect(url_for('login'))
     return render_template('forgot_password.html')
 
@@ -696,7 +727,10 @@ def download_file(file_id):
 
 
 with app.app_context():
-    migrate_db()
+    try:
+        migrate_db()
+    except Exception as e:
+        print('Ошибка миграции БД:', e)
 
 
 if __name__ == '__main__':
