@@ -1,0 +1,20 @@
+Скопируйте в Render → Environment (значения из локального .env, не заливайте .env в GitHub):
+
+SECRET_KEY=...
+EMAIL_USER=...
+EMAIL_PASS=...
+RECIPIENT_EMAIL=oktyabrsky28@gmail.com
+SMTP_SERVER=smtp.gmail.com
+FLASK_ENV=production
+FLASK_DEBUG=0
+BEHIND_PROXY=1
+SESSION_COOKIE_SECURE=1
+ADMIN_RESET_KEY=...
+STAFF_SKIP_EMAIL_VERIFY=1
+STAFF_CODE_WINDOW_MINUTES=15
+
+Start Command:
+gunicorn -w 1 -b 0.0.0.0:$PORT wsgi:app
+
+Код сотрудника для администратора:
+/admin/staff-code?key=ВАШ_ADMIN_RESET_KEY
