@@ -3,6 +3,34 @@
 {% block title %}Приём обращений граждан — МО МВД Октябрьский{% endblock %}
 
 {% block content %}
+<section class="news-banner mb-4" id="news-banner" aria-live="polite">
+    <div class="news-banner-header">
+        <span class="news-banner-badge">Новости МО МВД</span>
+        <span class="news-banner-counter" id="news-counter"></span>
+    </div>
+    <div class="news-banner-body">
+        <button type="button" class="news-nav-btn" id="news-prev" aria-label="Предыдущая новость">
+            <svg class="news-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 6L9 12l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <div class="news-banner-content">
+            <span class="news-banner-date" id="news-date"></span>
+            <h2 class="news-banner-title h5 mb-2" id="news-title"></h2>
+            <p class="news-banner-text mb-0" id="news-text"></p>
+        </div>
+        <button type="button" class="news-nav-btn" id="news-next" aria-label="Следующая новость">
+            <svg class="news-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+    <div class="news-banner-footer">
+        <div class="news-banner-dots" id="news-dots"></div>
+        <small class="news-banner-hint">Листайте стрелками или свайпом</small>
+    </div>
+</section>
+
 <section class="hero-section mb-4">
     <h1 class="hero-title h3 mb-3">Приём обращений граждан в МО МВД России по Октябрьскому району</h1>
     <p class="secondary-text mb-0">
@@ -40,4 +68,12 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.MVD_INITIAL_NEWS = {{ news_items | tojson }};
+    window.MVD_NEWS_API = "{{ url_for('api_news') }}";
+</script>
+<script src="{{ url_for('static', filename='js/home-news.js') }}"></script>
 {% endblock %}

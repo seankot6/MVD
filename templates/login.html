@@ -8,7 +8,28 @@
         <div class="card">
             <div class="card-header text-white text-center"><h4 class="mb-0">Авторизация</h4></div>
             <div class="card-body p-4">
-                <form method="POST" novalidate>
+                <form method="POST" id="login-form" novalidate>
+                    <div class="mb-4">
+                        <label class="form-label d-block">Тип входа</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="login_mode" id="login-citizen" value="citizen" checked>
+                            <label class="form-check-label" for="login-citizen">Я гражданин</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="login_mode" id="login-staff" value="staff">
+                            <label class="form-check-label" for="login-staff">Я сотрудник МО МВД</label>
+                        </div>
+                    </div>
+
+                    <div id="staff-login-box" class="staff-access-box d-none mb-4">
+                        <label class="form-label fw-semibold">Служебный код доступа <span class="text-danger">*</span></label>
+                        <input type="password" name="staff_code" id="staff_code" class="form-control"
+                               autocomplete="off" placeholder="Введите код сотрудника">
+                        <small class="secondary-text d-block mt-2">
+                            Код выдаётся администратору МО МВД. Подтверждение по email не требуется.
+                        </small>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Email или телефон <span class="text-danger">*</span></label>
                         <input type="text" name="login" class="form-control" required autocomplete="username"
@@ -23,7 +44,7 @@
                         <input class="form-check-input" type="checkbox" name="remember" id="remember">
                         <label class="form-check-label" for="remember">Запомнить меня (до 30 дней)</label>
                     </div>
-                    <button type="submit" class="btn btn-primary btn-lg w-100">Войти</button>
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="login-submit-btn">Войти</button>
                 </form>
                 <div class="text-center mt-3 secondary-text">
                     Нет аккаунта? <a href="{{ url_for('register') }}">Зарегистрироваться</a>
@@ -32,4 +53,8 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/login-form.js') }}"></script>
 {% endblock %}

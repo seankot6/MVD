@@ -11,6 +11,12 @@
             </div>
             <div class="card-body p-4">
                 {% if email %}
+                {% if show_code and verify_code %}
+                <div class="alert alert-warning">
+                    Письмо не пришло (на Render SMTP часто заблокирован). Ваш код:
+                    <strong class="fs-4 d-block mt-2 text-center">{{ verify_code }}</strong>
+                </div>
+                {% endif %}
                 <p class="text-muted">
                     На адрес <strong>{{ masked_email }}</strong> отправлен 6-значный код.
                     Введите его для завершения регистрации.

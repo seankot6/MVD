@@ -146,26 +146,215 @@ body {
     color: var(--mvd-blue) !important;
 }
 
-.site-toggler {
-    border-color: rgba(255, 255, 255, 0.45);
+/* Меню в шапке: на ПК всегда видно, на телефоне — нижняя панель */
+@media (min-width: 992px) {
+    .site-nav-desktop {
+        display: flex !important;
+        flex-basis: auto;
+        flex-grow: 1;
+        align-items: center;
+    }
 }
 
 @media (max-width: 991.98px) {
-    .site-nav-user {
-        margin-left: 0;
-        padding-left: 0;
-        border-left: none;
-        padding-top: 0.5rem;
-        margin-top: 0.5rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
+    .site-nav-desktop {
+        display: none !important;
+    }
+}
+
+/* Плашка новостей на главной */
+.news-banner {
+    background: linear-gradient(135deg, #003366 0%, #004d99 55%, #003366 100%);
+    color: #fff;
+    border-radius: 10px;
+    padding: 1rem 1rem 0.85rem;
+    box-shadow: 0 4px 14px rgba(0, 51, 102, 0.25);
+    transition: opacity 0.2s ease;
+    touch-action: pan-y;
+}
+
+.news-banner--fade {
+    opacity: 0.55;
+}
+
+.news-banner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.news-banner-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+}
+
+.news-banner-counter {
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.news-banner-body {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.news-banner-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.news-nav-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    box-shadow: none;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 0.15rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.news-nav-btn:hover,
+.news-nav-btn:focus-visible {
+    color: #fff;
+    background: none;
+    box-shadow: none;
+    outline: none;
+}
+
+.news-nav-btn:active {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.news-nav-icon {
+    width: 2rem;
+    height: 2rem;
+    display: block;
+}
+
+.news-banner-date {
+    display: block;
+    font-size: 0.78rem;
+    opacity: 0.85;
+    margin-bottom: 0.35rem;
+}
+
+.news-banner-title {
+    color: #fff !important;
+    font-weight: 700;
+}
+
+.news-banner-text {
+    font-size: 0.95rem;
+    line-height: 1.45;
+    opacity: 0.95;
+}
+
+.news-banner-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.news-banner-dots {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.news-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+}
+
+.news-dot.active {
+    background: #fff;
+    transform: scale(1.15);
+}
+
+.news-banner-hint {
+    font-size: 0.72rem;
+    opacity: 0.75;
+}
+
+/* Нижняя навигация на телефоне (вместо гамбургера) */
+.mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1040;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    background: #003366;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.15);
+    padding: 0.35rem 0 calc(0.35rem + env(safe-area-inset-bottom, 0));
+}
+
+.mobile-nav-item {
+    flex: 1;
+    text-align: center;
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.45rem 0.25rem;
+    border-radius: 6px;
+    margin: 0 0.15rem;
+}
+
+.mobile-nav-item.active,
+.mobile-nav-item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.mobile-nav-label {
+    display: block;
+    line-height: 1.2;
+}
+
+@media (max-width: 991.98px) {
+    body {
+        padding-bottom: 4.25rem;
     }
 
-    .user-badge {
+    main.container-xl {
+        padding-bottom: 0.5rem;
+    }
+
+    .site-navbar .navbar-brand {
         max-width: 100%;
+        margin-right: 0;
     }
 
-    .site-nav .nav-link {
-        padding: 0.55rem 0.5rem !important;
+    .site-brand-subtitle {
+        font-size: 0.65rem;
+        line-height: 1.2;
+        white-space: normal;
     }
 }
 
@@ -296,6 +485,19 @@ h1, h2, h3, h4, h5, .text-primary {
     color: #b02a37;
     font-size: 0.875rem;
     margin-top: 0.25rem;
+}
+
+#submit-btn:disabled,
+#login-submit-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.staff-access-box {
+    background: #f0f6fc;
+    border: 2px solid var(--mvd-blue);
+    border-radius: 8px;
+    padding: 1rem 1.15rem;
 }
 
 /* Мобильные устройства */

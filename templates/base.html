@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}МО МВД России по Октябрьскому району{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}?v=8" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -20,12 +20,7 @@
                 </div>
             </a>
 
-            <button class="navbar-toggler site-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                    aria-controls="navbarNav" aria-expanded="false" aria-label="Меню">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-
-            <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="collapse navbar-collapse site-nav-desktop" id="navbarNav">
                 <ul class="navbar-nav site-nav mx-lg-auto">
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}"
@@ -90,6 +85,28 @@
 
         {% block content %}{% endblock %}
     </main>
+
+    <nav class="mobile-bottom-nav d-lg-none" aria-label="Навигация">
+        <a href="{{ url_for('index') }}" class="mobile-nav-item {% if request.endpoint == 'index' %}active{% endif %}">
+            <span class="mobile-nav-label">Главная</span>
+        </a>
+        <a href="{{ url_for('submit_appeal') }}" class="mobile-nav-item {% if request.endpoint == 'submit_appeal' %}active{% endif %}">
+            <span class="mobile-nav-label">Обращение</span>
+        </a>
+        <a href="{{ url_for('check_status') }}" class="mobile-nav-item {% if request.endpoint == 'check_status' %}active{% endif %}">
+            <span class="mobile-nav-label">Статус</span>
+        </a>
+        {% if current_user.is_authenticated %}
+        <a href="{{ url_for('staff_panel') if current_user.is_staff else url_for('cabinet') }}"
+           class="mobile-nav-item {% if request.endpoint in ('cabinet', 'appeal_detail', 'staff_panel', 'staff_appeal_detail') %}active{% endif %}">
+            <span class="mobile-nav-label">{% if current_user.is_staff %}Панель{% else %}Кабинет{% endif %}</span>
+        </a>
+        {% else %}
+        <a href="{{ url_for('login') }}" class="mobile-nav-item {% if request.endpoint == 'login' %}active{% endif %}">
+            <span class="mobile-nav-label">Вход</span>
+        </a>
+        {% endif %}
+    </nav>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', filename='js/phone-mask.js') }}"></script>

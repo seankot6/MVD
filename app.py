@@ -1,16 +1,19 @@
+import json
 import os
 import random
 import re
 import secrets
 import smtplib
 from datetime import datetime, timedelta
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from uuid import uuid4
 
-from flask import Flask, flash, redirect, render_template, request, send_from_directory, url_for
+from flask import Flask, flash, jsonify, redirect, render_template, request, send_from_directory, url_for
 from markupsafe import escape
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from functools import wraps
@@ -46,9 +49,21 @@ login_manager.login_message = 'Для доступа войдите в личн�
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(os.path.join(os.path.dirname(__file__), 'instance'), exist_ok=True)
 
-RECIPIENT_EMAIL = 'oktyabrsky28@gmail.com'
-STAFF_EMAILS = {RECIPIENT_EMAIL.lower()}
+RECIPIENT_EMAIL = os.getenv('RECIPIENT_EMAIL', 'oktyabrsky28@gmail.com').strip().lower()
+STAFF_EMAILS = {'oktyabrsky28@gmail.com'}
+STAFF_SKIP_EMAIL_VERIFY = os.getenv('STAFF_SKIP_EMAIL_VERIFY', '0') == '1'
 PER_PAGE = 10
+
+
+def get_staff_access_code():
+    return os.getenv('STAFF_ACCESS_CODE', '').strip()
+
+
+def verify_staff_access_code(code):
+    expected = get_staff_access_code()
+    if not expected:
+        return False
+    return (code or '').strip() == expected
 MAX_APPEAL_TEXT = 5000
 SORT_COLUMNS = {
     'registration_number': Appeal.registration_number,
@@ -111,27 +126,103 @@ def normalize_phone(phone):
     return f'+{digits}'
 
 
-def send_email(to_email, subject, body):
-    email_user = os.getenv('EMAIL_USER')
-    email_pass = os.getenv('EMAIL_PASS')
+_LAST_EMAIL_ERROR = ''
+
+
+def is_render_free_smtp_blocked():
+    if os.getenv('RENDER', '').lower() not in ('true', '1', 'yes'):
+        return False
+    instance = os.getenv('RENDER_INSTANCE_TYPE', 'free').lower()
+    return instance in ('', 'free')
+
+
+def email_configured():
+    if os.getenv('RESEND_API_KEY', '').strip():
+        return True
+    return bool(os.getenv('EMAIL_USER', '').strip() and os.getenv('EMAIL_PASS', '').strip())
+
+
+def get_last_email_error():
+    return _LAST_EMAIL_ERROR
+
+
+def send_via_resend(to_email, subject, body):
+    global _LAST_EMAIL_ERROR
+    api_key = os.getenv('RESEND_API_KEY', '').strip()
+    from_addr = (
+        os.getenv('RESEND_FROM', '').strip()
+        or os.getenv('EMAIL_USER', '').strip()
+        or 'onboarding@resend.dev'
+    )
+    payload = json.dumps(
+        {'from': from_addr, 'to': [to_email], 'subject': subject, 'text': body},
+        ensure_ascii=False,
+    ).encode('utf-8')
+    req = Request(
+        'https://api.resend.com/emails',
+        data=payload,
+        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urlopen(req, timeout=25) as resp:
+            if 200 <= resp.status < 300:
+                return True
+            _LAST_EMAIL_ERROR = f'Resend HTTP {resp.status}'
+            return False
+    except HTTPError as e:
+        detail = e.read().decode('utf-8', errors='replace')[:400]
+        _LAST_EMAIL_ERROR = f'Resend {e.code}: {detail}'
+        print('Ошибка Resend:', _LAST_EMAIL_ERROR)
+        return False
+    except (URLError, TimeoutError, OSError) as e:
+        _LAST_EMAIL_ERROR = f'Resend: {e}'
+        print('Ошибка Resend:', e)
+        return False
+
+
+def send_via_smtp(to_email, subject, body):
+    global _LAST_EMAIL_ERROR
+    email_user = os.getenv('EMAIL_USER', '').strip()
+    email_pass = os.getenv('EMAIL_PASS', '').strip()
     if not email_user or not email_pass:
-        print('Ошибка почты: не заданы EMAIL_USER или EMAIL_PASS')
+        _LAST_EMAIL_ERROR = 'Не заданы EMAIL_USER или EMAIL_PASS'
         return False
     try:
         msg = MIMEMultipart()
         msg['From'] = email_user
         msg['To'] = to_email
         msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
-        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=20)
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+        smtp_host = os.getenv('SMTP_SERVER', 'smtp.gmail.com').strip()
+        server = smtplib.SMTP(smtp_host, 587, timeout=15)
         server.starttls()
         server.login(email_user, email_pass)
         server.send_message(msg)
         server.quit()
         return True
     except Exception as e:
-        print('Ошибка почты:', e)
+        err = str(e).lower()
+        print('Ошибка SMTP:', e)
+        if is_render_free_smtp_blocked() and ('timed out' in err or 'timeout' in err or '10060' in err):
+            _LAST_EMAIL_ERROR = (
+                'Бесплатный Render блокирует Gmail SMTP. Добавьте RESEND_API_KEY или используйте admin/setup-staff.'
+            )
+        else:
+            _LAST_EMAIL_ERROR = str(e)
         return False
+
+
+def send_email(to_email, subject, body):
+    global _LAST_EMAIL_ERROR
+    _LAST_EMAIL_ERROR = ''
+    if os.getenv('RESEND_API_KEY', '').strip():
+        return send_via_resend(to_email, subject, body)
+    if not os.getenv('EMAIL_USER', '').strip() or not os.getenv('EMAIL_PASS', '').strip():
+        _LAST_EMAIL_ERROR = 'Не заданы EMAIL_USER или EMAIL_PASS'
+        print('Ошибка почты:', _LAST_EMAIL_ERROR)
+        return False
+    return send_via_smtp(to_email, subject, body)
 
 
 def mask_email(email):
@@ -150,12 +241,13 @@ def generate_email_verify_code():
 
 
 def issue_email_verify_code(user):
-    """Сохраняет код в БД и отправляет письмо. Пользователь уже должен быть в базе."""
+    """Сохраняет код в БД и отправляет письмо. Возвращает (успех_отправки, код)."""
     user.email_verify_code = generate_email_verify_code()
     user.email_verify_expires = datetime.utcnow() + timedelta(minutes=15)
     user.email_verified = False
+    code = user.email_verify_code
     body = (
-        f'Код подтверждения регистрации: {user.email_verify_code}\n\n'
+        f'Код подтверждения регистрации: {code}\n\n'
         'Введите его на странице подтверждения email.\n'
         'Код действует 15 минут.'
     )
@@ -164,11 +256,11 @@ def issue_email_verify_code(user):
     except Exception as e:
         db.session.rollback()
         print('Ошибка сохранения кода:', e)
-        return False
+        return False, None
     if send_email(user.email, 'Код подтверждения — МО МВД Октябрьский', body):
-        return True
+        return True, code
     print('Письмо с кодом не отправлено на', user.email)
-    return False
+    return False, code
 
 
 def optional_phone(phone):
@@ -215,6 +307,9 @@ def migrate_db():
         'reset_token': 'VARCHAR(128)',
         'reset_token_expires': 'DATETIME',
         'role': "VARCHAR(20) DEFAULT 'citizen'",
+        'email_verify_code': 'VARCHAR(6)',
+        'email_verify_expires': 'DATETIME',
+        'email_verified': 'BOOLEAN DEFAULT 1',
     }
     for name, col_type in user_migrations.items():
         if name not in user_cols:
@@ -337,9 +432,27 @@ Email: {appeal.email or '—'}
     return send_email(RECIPIENT_EMAIL, f'Обращение {appeal.registration_number}', body)
 
 
+NEWS_FILE = os.path.join(os.path.dirname(__file__), 'static', 'data', 'news.json')
+
+
+def load_news_items():
+    try:
+        with open(NEWS_FILE, encoding='utf-8') as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (OSError, json.JSONDecodeError) as e:
+        print('Ошибка загрузки новостей:', e)
+        return []
+
+
+@app.route('/api/news')
+def api_news():
+    return jsonify(load_news_items())
+
+
 @app.route('/')
 def index():
-    return render_template('home.html')
+    return render_template('home.html', news_items=load_news_items())
 
 
 @app.route('/appeal/submit', methods=['GET', 'POST'])
@@ -433,8 +546,8 @@ def register():
             flash('Пароли не совпадают.', 'danger')
             return redirect(url_for('register'))
         if User.query.filter_by(email=email).first():
-            flash('Пользователь с таким email уже зарегистрирован.', 'danger')
-            return redirect(url_for('register'))
+            flash('Этот email уже зарегистрирован. Войдите или восстановите пароль.', 'warning')
+            return redirect(url_for('login'))
 
         user = User(
             email=email,
@@ -452,17 +565,19 @@ def register():
 
         try:
             if is_staff:
+                staff_code = request.form.get('staff_code', '').strip()
+                if not get_staff_access_code():
+                    flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
+                    return redirect(url_for('register'))
+                if not verify_staff_access_code(staff_code):
+                    flash('Неверный служебный код доступа сотрудника.', 'danger')
+                    return redirect(url_for('register'))
+                user.email_verified = True
+                user.email_verify_code = None
+                user.email_verify_expires = None
                 db.session.commit()
-                email_sent = issue_email_verify_code(user)
-                if email_sent:
-                    flash('На ваш email отправлен 6-значный код. Введите его для завершения регистрации.', 'info')
-                else:
-                    flash(
-                        'Аккаунт создан, но письмо не ушло. На следующей странице нажмите '
-                        '«Отправить код повторно» или проверьте EMAIL_USER / EMAIL_PASS в Render → Environment.',
-                        'warning',
-                    )
-                return redirect(url_for('register_verify', email=email))
+                flash('Регистрация сотрудника успешна. Войдите в панель обработки обращений.', 'success')
+                return redirect(url_for('login'))
 
             db.session.commit()
         except Exception as e:
@@ -490,11 +605,18 @@ def register_verify():
             return redirect(url_for('register'))
 
         if action == 'resend':
-            if issue_email_verify_code(user):
-                flash('Новый код отправлен на email.', 'info')
-            else:
-                flash('Не удалось отправить код. Попробуйте позже.', 'danger')
-            return redirect(url_for('register_verify', email=email))
+            if not email_configured():
+                flash(
+                    'Почта не настроена. Добавьте EMAIL_USER/EMAIL_PASS или RESEND_API_KEY в .env / Render.',
+                    'danger',
+                )
+                return redirect(url_for('register_verify', email=email))
+            email_sent, verify_code = issue_email_verify_code(user)
+            if email_sent:
+                flash('Новый код отправлен на email. Проверьте папку «Спам».', 'info')
+                return redirect(url_for('register_verify', email=email))
+            flash('Письмо не отправилось. Используйте код на странице.', 'warning')
+            return redirect(url_for('register_verify', email=email, show_code=1))
 
         code = request.form.get('code', '').strip()
         if not code:
@@ -521,7 +643,15 @@ def register_verify():
         flash('Email уже подтверждён. Войдите в систему.', 'info')
         return redirect(url_for('login'))
 
-    return render_template('register_verify.html', email=email, masked_email=mask_email(email) if email else '')
+    show_code = request.args.get('show_code') == '1'
+    verify_code = user.email_verify_code if (user and show_code) else None
+    return render_template(
+        'register_verify.html',
+        email=email,
+        masked_email=mask_email(email) if email else '',
+        show_code=show_code,
+        verify_code=verify_code,
+    )
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -532,17 +662,40 @@ def login():
         login_value = request.form.get('login', '').strip()
         password = request.form.get('password', '')
         remember = request.form.get('remember') == 'on'
+        staff_mode = request.form.get('login_mode') == 'staff'
+        staff_code = request.form.get('staff_code', '').strip()
+
+        if staff_mode:
+            if not get_staff_access_code():
+                flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
+                return redirect(url_for('login'))
+            if not verify_staff_access_code(staff_code):
+                flash('Неверный служебный код доступа сотрудника.', 'danger')
+                return redirect(url_for('login'))
+
         user = find_user_by_login(login_value)
-        if user and user.check_password(password):
-            if user.is_staff and not user.email_verified:
-                flash('Подтвердите email — введите код из письма.', 'warning')
-                return redirect(url_for('register_verify', email=user.email))
+        if not user:
+            flash('Аккаунт с таким email или телефоном не найден.', 'danger')
+        elif staff_mode and not user.is_staff:
+            flash('Этот аккаунт не зарегистрирован как сотрудник МО МВД.', 'danger')
+        elif not user.check_password(password):
+            flash('Неверный пароль. Попробуйте снова или восстановите пароль.', 'danger')
+        elif user.is_staff and not staff_mode:
+            flash('Для входа сотрудника выберите «Я сотрудник» и введите служебный код.', 'warning')
+        else:
+            if user.is_staff and staff_mode and not user.email_verified:
+                user.email_verified = True
+                user.email_verify_code = None
+                user.email_verify_expires = None
+                db.session.commit()
+            elif user.is_staff and not user.email_verified and not staff_mode:
+                flash('Для входа сотрудника выберите «Я сотрудник» и введите служебный код.', 'warning')
+                return redirect(url_for('login'))
             login_user(user, remember=remember)
             next_url = request.args.get('next')
             if next_url:
                 return redirect(next_url)
             return redirect(home_url_for_user(user))
-        flash('Неверный email, телефон или пароль.', 'danger')
     return render_template('login.html')
 
 
@@ -563,14 +716,13 @@ def forgot_password():
                 f'Ссылка для сброса пароля:\n{reset_url}\n\nДействует 1 час.',
             ):
                 flash('Ссылка для сброса пароля отправлена на email. Проверьте также папку «Спам».', 'success')
-            else:
-                flash(
-                    'Аккаунт найден, но письмо не отправлено. На сервере не настроена почта '
-                    '(EMAIL_USER / EMAIL_PASS в Render → Environment). Обратитесь к администратору.',
-                    'danger',
-                )
-        else:
-            flash('Если аккаунт существует, ссылка для сброса пароля отправлена на email.', 'info')
+                return redirect(url_for('login'))
+            return render_template(
+                'forgot_password_link.html',
+                reset_url=reset_url,
+                email=mask_email(user.email),
+            )
+        flash('Если аккаунт существует, ссылка для сброса пароля отправлена на email.', 'info')
         return redirect(url_for('login'))
     return render_template('forgot_password.html')
 
@@ -740,6 +892,76 @@ def download_file(file_id):
         flash('Доступ запрещён.', 'danger')
         return redirect(home_url_for_user(current_user))
     return send_from_directory(app.config['UPLOAD_FOLDER'], file.stored_name, as_attachment=True, download_name=file.original_name)
+
+
+@app.route('/admin/test-email')
+def admin_test_email():
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key or request.args.get('key', '') != admin_key:
+        return 'Неверный ADMIN_RESET_KEY.', 403
+    to_addr = request.args.get('to', '').strip().lower() or os.getenv('EMAIL_USER', '').strip()
+    if not to_addr:
+        return 'Укажите ?to=ваш@gmail.com', 400
+    ok = send_email(to_addr, 'Тест — МО МВД', 'Если вы видите это письмо — отправка работает.')
+    lines = [
+        f'Отправка на {to_addr}: {"OK" if ok else "ОШИБКА"}',
+        f'RENDER free (SMTP заблокирован): {is_render_free_smtp_blocked()}',
+        f'RESEND_API_KEY: {"да" if os.getenv("RESEND_API_KEY", "").strip() else "нет"}',
+    ]
+    if not ok and get_last_email_error():
+        lines.append(f'Причина: {get_last_email_error()}')
+    return '<br>'.join(lines), (200 if ok else 500)
+
+
+@app.route('/admin/verify-staff-email')
+def admin_verify_staff_email():
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key:
+        return 'Задайте ADMIN_RESET_KEY в .env или Render.', 404
+    if request.args.get('key', '') != admin_key:
+        return 'Неверный ключ.', 403
+    email = request.args.get('email', '').strip().lower()
+    if not email:
+        return 'Укажите ?key=...&email=адрес@mail.ru', 400
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return f'Пользователь {email} не найден.', 404
+    if email not in STAFF_EMAILS:
+        return 'Этот email не в списке служебных.', 403
+    user.role = 'staff'
+    user.email_verified = True
+    user.email_verify_code = None
+    user.email_verify_expires = None
+    db.session.commit()
+    flash('Email сотрудника подтверждён. Войдите в систему.', 'success')
+    return redirect(url_for('login'))
+
+
+@app.route('/admin/setup-staff')
+def admin_setup_staff():
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key or request.args.get('key', '') != admin_key:
+        return 'Неверный или отсутствует ADMIN_RESET_KEY.', 403
+    email = request.args.get('email', '').strip().lower()
+    password = request.args.get('password', '').strip()
+    if not email:
+        return 'Укажите: ?key=КЛЮЧ&email=oktyabrsky28@gmail.com&password=ВашПароль123', 400
+    if email not in STAFF_EMAILS:
+        return 'Этот email не разрешён для сотрудника.', 403
+    pwd_error = validate_password(password)
+    if pwd_error:
+        return f'Пароль не подходит: {pwd_error}', 400
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        return f'Сначала зарегистрируйтесь на сайте как сотрудник ({email}).', 404
+    user.role = 'staff'
+    user.email_verified = True
+    user.email_verify_code = None
+    user.email_verify_expires = None
+    user.set_password(password)
+    db.session.commit()
+    flash(f'Сотрудник {email} настроен. Войдите с новым паролем.', 'success')
+    return redirect(url_for('login'))
 
 
 @app.route('/admin/clear-database', methods=['GET', 'POST'])

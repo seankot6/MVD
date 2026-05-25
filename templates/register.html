@@ -20,8 +20,16 @@
                             <label class="form-check-label" for="role-staff">Я сотрудник МО МВД</label>
                         </div>
                         <small id="staff-hint" class="secondary-text d-none">
-                            Регистрация сотрудника доступна только по служебной (рабочей) почте МО МВД.
-                            Укажите email и ФИО — после отправки формы на почту придёт код подтверждения.
+                            Регистрация только по служебному email МО МВД. Подтверждение — служебным кодом (не по почте).
+                        </small>
+                    </div>
+
+                    <div id="staff-register-box" class="staff-access-box d-none mb-4">
+                        <label class="form-label fw-semibold">Служебный код доступа <span class="text-danger">*</span></label>
+                        <input type="password" name="staff_code" id="register-staff-code" class="form-control"
+                               autocomplete="off" placeholder="Введите код сотрудника">
+                        <small class="secondary-text d-block mt-2">
+                            Без правильного кода регистрация сотрудника невозможна.
                         </small>
                     </div>
 
@@ -79,7 +87,7 @@
                         </label>
                     </div>
 
-                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submit-btn">Зарегистрироваться</button>
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submit-btn" disabled>Зарегистрироваться</button>
                 </form>
             </div>
         </div>
