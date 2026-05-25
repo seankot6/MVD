@@ -1,55 +1,74 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white text-center">
-                <h4>Подать обращение граждан</h4>
-            </div>
+<div class="row">
+    <div class="col-lg-3 mb-4">
+        <div class="card shadow-sm">
             <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    {{ form.hidden_tag() if form else '' }}
+                <h5 class="text-primary mb-3">Адрес</h5>
+                <p><strong>с. Екатеринославка</strong><br>ул. Коммунальная, 57</p>
+                <hr>
+                <h5 class="text-primary mb-3">Часы работы</h5>
+                <p><strong>Приём обращений:</strong><br>
+                   Пн — Пт: 09:00 — 18:00<br>Обед: 13:00 — 14:00</p>
+                <hr>
+                <h5 class="text-primary mb-3">Контакты</h5>
+                <p><strong>Дежурная часть:</strong><br>+7 (416) 522-52-22</p>
+                <p><strong>Единый номер:</strong> 102 или 112</p>
+            </div>
+        </div>
+    </div>
 
-                    <!-- Выбор анонимно или зарегистрироваться -->
-                    <div class="mb-4">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="anonymous" name="anonymous" onchange="toggleFields()">
-                            <label class="form-check-label fw-bold" for="anonymous">Подать обращение анонимно</label>
-                        </div>
+    <div class="col-lg-6">
+        <div class="card shadow">
+            <div class="card-header text-white text-center">
+                <h4 class="mb-0">Подать обращение в МВД Октябрьский</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-4 form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="anonymous" name="anonymous" onchange="toggleFields()">
+                        <label class="form-check-label fw-bold" for="anonymous">Подать обращение анонимно</label>
                     </div>
 
                     <div id="user-fields">
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">ФИО <span class="text-danger">*</span></label>
-                                <input type="text" name="full_name" class="form-control" required>
+                                <input type="text" name="full_name" class="form-control">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Телефон <span class="text-danger">*</span></label>
-                                <input type="tel" name="phone" class="form-control" required>
+                                <input type="tel" name="phone" class="form-control phone-input" placeholder="+7 (999) 123-45-67">
                             </div>
                         </div>
-
                         <div class="mb-3">
                             <label class="form-label">Адрес проживания</label>
                             <input type="text" name="address" class="form-control">
                         </div>
-
                         <div class="mb-3">
                             <label class="form-label">Email (необязательно)</label>
                             <input type="email" name="email" class="form-control">
                         </div>
                     </div>
 
-                    <div class="mb-4">
-                        <label class="form-label">Текст обращения <span class="text-danger">*</span></label>
-                        <textarea name="appeal_text" class="form-control" rows="6" required placeholder="Опишите вашу проблему..."></textarea>
+                    <div class="mb-3">
+                        <label class="form-label">Категория обращения <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select" required>
+                            {% for key, label in categories.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                     <div class="mb-4">
-                        <label class="form-label">Прикрепить фото / файл (необязательно)</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*">
+                        <label class="form-label">Текст обращения <span class="text-danger">*</span></label>
+                        <textarea name="appeal_text" class="form-control" rows="7" required placeholder="Опишите вашу проблему..."></textarea>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Прикрепить фото или документ</label>
+                        <input type="file" name="photo" class="form-control" accept="image/*,.pdf,.doc,.docx">
                         <small class="text-muted">Максимум 5 МБ</small>
                     </div>
 
@@ -58,5 +77,32 @@
             </div>
         </div>
     </div>
+
+    <div class="col-lg-3 mb-4">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="text-primary mb-3">Новости полиции</h5>
+                <div class="mb-3">
+                    <strong>05.05.2026</strong><br>
+                    <small>Проведён рейд по профилактике ДТП в с. Екатеринославка</small>
+                </div>
+                <div class="mb-3">
+                    <strong>03.05.2026</strong><br>
+                    <small>Напоминаем о необходимости регистрации транспортных средств</small>
+                </div>
+                <div class="mb-3">
+                    <strong>01.05.2026</strong><br>
+                    <small>Усилены меры безопасности в майские праздники</small>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+    function toggleFields() {
+        var isAnon = document.getElementById('anonymous').checked;
+        document.getElementById('user-fields').style.display = isAnon ? 'none' : 'block';
+    }
+</script>
 {% endblock %}

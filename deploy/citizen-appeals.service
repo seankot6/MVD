@@ -1,0 +1,19 @@
+[Unit]
+Description=Citizen Appeals Flask App
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/citizen-appeals
+EnvironmentFile=/var/www/citizen-appeals/.env
+Environment=BEHIND_PROXY=1
+Environment=FLASK_ENV=production
+Environment=FLASK_DEBUG=0
+Environment=SESSION_COOKIE_SECURE=1
+ExecStart=/var/www/citizen-appeals/venv/bin/gunicorn -w 2 -b 127.0.0.1:8000 wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Подтверждение email — МО МВД Октябрьский{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-5">
+        <div class="card shadow">
+            <div class="card-header text-white text-center">
+                <h4 class="mb-0">{% if needs_email %}Привязка email{% else %}Подтверждение email{% endif %}</h4>
+            </div>
+            <div class="card-body p-4">
+                {% if needs_email %}
+                <p class="text-muted">
+                    В вашем аккаунте не указан email (старая регистрация).
+                    Укажите email — на него придёт код подтверждения.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="action" value="bind">
+                    <div class="mb-4">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" placeholder="example@mail.ru" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Привязать и отправить код</button>
+                </form>
+                {% else %}
+                <p class="text-muted">
+                    На адрес <strong>{{ masked_email }}</strong> отправлен 6-значный код.
+                    Введите его ниже для подтверждения.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="action" value="verify">
+                    <div class="mb-4">
+                        <label class="form-label">Код из письма <span class="text-danger">*</span></label>
+                        <input type="text" name="code" class="form-control form-control-lg text-center"
+                               maxlength="6" pattern="\d{6}" inputmode="numeric" placeholder="000000" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">Подтвердить</button>
+                </form>
+                <form method="POST" class="text-center mb-3">
+                    <input type="hidden" name="action" value="resend">
+                    <button type="submit" class="btn btn-link">Отправить код повторно</button>
+                </form>
+                <details>
+                    <summary class="text-primary text-center" style="cursor:pointer;">Указать другой email</summary>
+                    <form method="POST" class="mt-3">
+                        <input type="hidden" name="action" value="change">
+                        <div class="mb-3">
+                            <label class="form-label">Новый email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary w-100">Сменить email</button>
+                    </form>
+                </details>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

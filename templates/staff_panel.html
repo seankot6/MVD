@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Панель сотрудника — МО МВД Октябрьский{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sortable-header {
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .sortable-header:hover {
+        background-color: rgba(0, 51, 160, 0.08);
+    }
+    .sort-indicator {
+        font-size: 0.75rem;
+        opacity: 0.7;
+    }
+    .status-badge {
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="mb-1">Панель сотрудника</h3>
+        <p class="text-muted mb-0">Все поступившие обращения граждан</p>
+    </div>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0">Фильтры</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('staff_panel') }}" class="row g-3 align-items-end">
+            <input type="hidden" name="sort" value="{{ filters.sort }}">
+            <input type="hidden" name="order" value="{{ filters.order }}">
+
+            <div class="col-md-3">
+                <label class="form-label">Категория</label>
+                <select name="category" class="form-select">
+                    <option value="">Все категории</option>
+                    {% for key, label in categories.items() %}
+                    <option value="{{ key }}" {% if filters.category == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Статус</label>
+                <select name="status" class="form-select">
+                    <option value="">Все статусы</option>
+                    {% for key, label in statuses.items() %}
+                    <option value="{{ key }}" {% if filters.status == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Дата с</label>
+                <input type="date" name="date_from" class="form-control" value="{{ filters.date_from }}">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Дата по</label>
+                <input type="date" name="date_to" class="form-control" value="{{ filters.date_to }}">
+            </div>
+
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Применить фильтр</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th class="sortable-header">
+                            <a href="{{ sort_url('registration_number') }}" class="text-decoration-none text-dark">
+                                Рег. номер
+                                {% if sort == 'registration_number' %}
+                                <span class="sort-indicator">{{ '▲' if order == 'asc' else '▼' }}</span>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="sortable-header">
+                            <a href="{{ sort_url('date_submitted') }}" class="text-decoration-none text-dark">
+                                Дата подачи
+                                {% if sort == 'date_submitted' %}
+                                <span class="sort-indicator">{{ '▲' if order == 'asc' else '▼' }}</span>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th>Заявитель</th>
+                        <th class="sortable-header">
+                            <a href="{{ sort_url('category') }}" class="text-decoration-none text-dark">
+                                Категория
+                                {% if sort == 'category' %}
+                                <span class="sort-indicator">{{ '▲' if order == 'asc' else '▼' }}</span>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="sortable-header">
+                            <a href="{{ sort_url('status') }}" class="text-decoration-none text-dark">
+                                Статус
+                                {% if sort == 'status' %}
+                                <span class="sort-indicator">{{ '▲' if order == 'asc' else '▼' }}</span>
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th>Файлы</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if appeals %}
+                        {% for appeal in appeals %}
+                        <tr>
+                            <td><strong>{{ appeal.registration_number }}</strong></td>
+                            <td>{{ appeal.date_submitted.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>{{ appeal.applicant_fio }}</td>
+                            <td>{{ appeal.category_label }}</td>
+                            <td>
+                                {% if appeal.status == 'received' %}
+                                <span class="badge bg-secondary status-badge">{{ appeal.status_label }}</span>
+                                {% elif appeal.status == 'in_progress' %}
+                                <span class="badge bg-primary status-badge">{{ appeal.status_label }}</span>
+                                {% elif appeal.status == 'closed' %}
+                                <span class="badge bg-success status-badge">{{ appeal.status_label }}</span>
+                                {% else %}
+                                <span class="badge bg-danger status-badge">{{ appeal.status_label }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ appeal.files|length }}</td>
+                            <td>
+                                <a href="{{ url_for('staff_appeal_detail', appeal_id=appeal.id) }}" class="btn btn-sm btn-outline-primary">
+                                    Обработать
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                Обращений не найдено
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <div class="card-footer bg-white">
+        <nav aria-label="Навигация по страницам">
+            <ul class="pagination justify-content-center mb-0 flex-wrap">
+                <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                    <a class="page-link" href="{{ page_url(pagination.prev_num) if pagination.has_prev else '#' }}">Назад</a>
+                </li>
+
+                {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                    {% if page_num %}
+                    <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ page_url(page_num) }}">{{ page_num }}</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled"><span class="page-link">…</span></li>
+                    {% endif %}
+                {% endfor %}
+
+                <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                    <a class="page-link" href="{{ page_url(pagination.next_num) if pagination.has_next else '#' }}">Вперёд</a>
+                </li>
+            </ul>
+        </nav>
+        <p class="text-center text-muted small mt-2 mb-0">
+            Показано {{ appeals|length }} из {{ pagination.total }} обращений
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Подать обращение — МО МВД Октябрьский{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header text-white"><h4 class="mb-0">Подача обращения</h4></div>
+            <div class="card-body p-4">
+                <form method="POST" enctype="multipart/form-data" id="appeal-form" novalidate>
+                    {% if profile %}
+                    <div class="alert alert-light border mb-4">
+                        <strong>Данные из профиля</strong>
+                        <div class="mt-2 secondary-text">ФИО: {{ profile.fio }}</div>
+                        <div class="secondary-text">Email: {{ profile.email }}</div>
+                    </div>
+                    {% else %}
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Фамилия</label>
+                            <input type="text" name="last_name" class="form-control">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Имя</label>
+                            <input type="text" name="first_name" class="form-control">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Отчество</label>
+                            <input type="text" name="patronymic" class="form-control">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email для уведомлений <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" required>
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Категория обращения <span class="text-danger">*</span></label>
+                        <select name="category" class="form-select" required>
+                            {% for key, label in categories.items() %}
+                            <option value="{{ key }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label">Текст обращения <span class="text-danger">*</span></label>
+                        <textarea name="appeal_text" id="appeal_text" class="form-control" rows="8" maxlength="{{ max_text }}" required></textarea>
+                        <div class="char-counter"><span id="char-count">0</span> / {{ max_text }}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Прикрепить файлы</label>
+                        <input type="file" id="file-input" class="form-control" multiple accept="image/*,.pdf,.doc,.docx">
+                        <input type="file" name="files" id="files-hidden" multiple hidden>
+                        <div id="file-list" class="mt-2"></div>
+                    </div>
+
+                    <div class="mb-4 form-check">
+                        <input class="form-check-input" type="checkbox" name="consent" id="consent" required>
+                        <label class="form-check-label" for="consent">Согласие на обработку персональных данных (152-ФЗ)</label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100">Отправить обращение</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/appeal-form.js') }}"></script>
+{% endblock %}

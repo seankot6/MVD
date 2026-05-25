@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Обращение {{ appeal.registration_number }} — сотрудник{% endblock %}
+
+{% block content %}
+<div class="mb-3"><a href="{{ url_for('staff_panel') }}">← К списку обращений</a></div>
+
+<div class="card mb-4">
+    <div class="card-header text-white"><h4 class="mb-0">{{ appeal.registration_number }}</h4></div>
+    <div class="card-body p-4">
+        <div class="row g-3">
+            <div class="col-md-6"><strong>Дата регистрации:</strong> {{ appeal.date_submitted.strftime('%d.%m.%Y %H:%M') }}</div>
+            <div class="col-md-6"><strong>Категория:</strong> {{ appeal.category_label }}</div>
+            <div class="col-md-6"><strong>Текущий статус:</strong> {{ appeal.status_label }}</div>
+            <div class="col-md-6"><strong>Заявитель:</strong> {{ appeal.applicant_fio }}</div>
+            <div class="col-md-6"><strong>Email:</strong> {{ appeal.email or '—' }}</div>
+            <div class="col-md-6"><strong>Телефон:</strong> {{ appeal.phone or '—' }}</div>
+            <div class="col-md-12"><strong>Адрес:</strong> {{ appeal.address or '—' }}</div>
+            <div class="col-12"><strong>Текст обращения:</strong><p class="border rounded p-3 bg-light mb-0" style="white-space:pre-wrap;">{{ appeal.appeal_text }}</p></div>
+        </div>
+
+        {% if appeal.files %}
+        <h6 class="mt-4">Прикреплённые файлы</h6>
+        <ul class="list-group mb-0">
+            {% for f in appeal.files %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>{{ f.original_name }} <small class="text-muted">({{ f.uploaded_at.strftime('%d.%m.%Y %H:%M') }})</small></span>
+                <a href="{{ url_for('download_file', file_id=f.id) }}" class="btn btn-sm btn-outline-primary">Скачать</a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted mt-4 mb-0">Файлы не прикреплены.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-white"><h5 class="mb-0 text-primary">Изменить статус</h5></div>
+    <div class="card-body p-4">
+        <form method="POST">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label">Новый статус</label>
+                    <select name="status" class="form-select" required>
+                        {% for key, label in statuses.items() %}
+                        <option value="{{ key }}" {% if appeal.status == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Комментарий для истории</label>
+                    <input type="text" name="comment" class="form-control" placeholder="Например: документы проверены, направлено в отдел">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Сохранить статус</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-white"><h5 class="mb-0 text-primary">История изменения статуса</h5></div>
+    <div class="card-body p-0">
+        <table class="table mb-0">
+            <thead><tr><th>Дата и время</th><th>Статус</th><th>Комментарий</th></tr></thead>
+            <tbody>
+                {% for h in history %}
+                <tr>
+                    <td>{{ h.changed_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    <td>{{ h.status_label }}</td>
+                    <td>{{ h.comment or '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3" class="text-center secondary-text py-3">История пуста</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if appeal.rating %}
+<div class="card">
+    <div class="card-header bg-white"><h5 class="mb-0 text-primary">Оценка заявителя</h5></div>
+    <div class="card-body p-4">
+        <p class="mb-0"><strong>{{ appeal.rating.rating_label }}</strong>{% if appeal.rating.comment %} — {{ appeal.rating.comment }}{% endif %}</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

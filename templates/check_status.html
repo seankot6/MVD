@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Проверка статуса — МО МВД Октябрьский{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header text-white"><h4 class="mb-0">Проверка статуса обращения</h4></div>
+            <div class="card-body p-4">
+                <p class="secondary-text">Для анонимных заявителей без личного кабинета.</p>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Регистрационный номер <span class="text-danger">*</span></label>
+                        <input type="text" name="registration_number" class="form-control" value="{{ reg_number }}" required placeholder="ОБР-2026-00001">
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Email заявителя <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" value="{{ email }}" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Проверить статус</button>
+                </form>
+            </div>
+        </div>
+
+        {% if appeal %}
+        <div class="card">
+            <div class="card-header text-white"><h5 class="mb-0">Результат проверки</h5></div>
+            <div class="card-body p-4">
+                <p><strong>Номер:</strong> {{ appeal.registration_number }}</p>
+                <p><strong>Дата регистрации:</strong> {{ appeal.date_submitted.strftime('%d.%m.%Y %H:%M') }}</p>
+                <p><strong>Категория:</strong> {{ appeal.category_label }}</p>
+                <p><strong>Текущий статус:</strong> {{ appeal.status_label }}</p>
+                {% if history %}
+                <h6 class="mt-4">История статуса</h6>
+                <table class="table table-sm">
+                    <thead><tr><th>Дата</th><th>Статус</th></tr></thead>
+                    <tbody>
+                        {% for item in history %}
+                        <tr>
+                            <td>{{ item.changed_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                            <td>{{ item.status_label }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+                <p class="secondary-text mt-3 mb-0">Для полного доступа к документам и оценки качества рассмотрения зарегистрируйтесь в системе.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</p>
+{% endblock %}

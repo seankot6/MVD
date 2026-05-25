@@ -1,39 +1,93 @@
 {% extends "base.html" %}
 
+{% block title %}Регистрация — МО МВД Октябрьский{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-6">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white text-center">
-                <h4>Регистрация пользователя</h4>
-            </div>
-            <div class="card-body">
-                <form method="POST">
-                    <div class="mb-3">
-                        <label class="form-label">Номер телефона <span class="text-danger">*</span></label>
-                        <input type="tel" name="phone" class="form-control" placeholder="+7 (___) ___-__-__" required>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header text-white text-center"><h4 class="mb-0">Регистрация пользователя</h4></div>
+            <div class="card-body p-4">
+                <form method="POST" id="register-form" novalidate>
+                    <div class="mb-4">
+                        <label class="form-label d-block">Тип аккаунта <span class="text-danger">*</span></label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="role" id="role-citizen" value="citizen" checked>
+                            <label class="form-check-label" for="role-citizen">Я гражданин</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="role" id="role-staff" value="staff">
+                            <label class="form-check-label" for="role-staff">Я сотрудник МО МВД</label>
+                        </div>
+                        <small id="staff-hint" class="secondary-text d-none">
+                            Регистрация сотрудника доступна только по служебной (рабочей) почте МО МВД.
+                            Укажите email и ФИО — после отправки формы на почту придёт код подтверждения.
+                        </small>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label">ФИО <span class="text-danger">*</span></label>
-                        <input type="text" name="full_name" class="form-control" required>
+                        <label class="form-label">Email (логин) <span class="text-danger">*</span></label>
+                        <input type="email" name="email" class="form-control" required>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Адрес проживания</label>
-                        <input type="text" name="address" class="form-control">
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Фамилия <span class="text-danger">*</span></label>
+                            <input type="text" name="last_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Имя <span class="text-danger">*</span></label>
+                            <input type="text" name="first_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Отчество</label>
+                            <input type="text" name="patronymic" class="form-control">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email (необязательно)</label>
-                        <input type="email" name="email" class="form-control">
+
+                    <div id="citizen-extra-fields">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Контактный телефон</label>
+                                <input type="tel" name="phone" class="form-control phone-input" placeholder="+7 (999) 123-45-67">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Почтовый адрес</label>
+                                <input type="text" name="address" class="form-control">
+                            </div>
+                        </div>
                     </div>
-                    
-                    <button type="submit" class="btn btn-primary btn-lg w-100">Зарегистрироваться</button>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Пароль <span class="text-danger">*</span></label>
+                            <input type="password" name="password" id="password" class="form-control" required>
+                            <small class="secondary-text">Мин. 8 символов, заглавные и строчные буквы, цифры</small>
+                            <div id="password-error" class="validation-error"></div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Подтверждение пароля <span class="text-danger">*</span></label>
+                            <input type="password" name="password2" id="password2" class="form-control" required>
+                            <div id="password2-error" class="validation-error"></div>
+                        </div>
+                    </div>
+
+                    <div id="citizen-consent" class="mb-4 form-check">
+                        <input class="form-check-input" type="checkbox" name="consent" id="consent" required>
+                        <label class="form-check-label" for="consent">
+                            Согласен(на) на обработку персональных данных в соответствии с ФЗ № 152-ФЗ
+                        </label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="submit-btn">Зарегистрироваться</button>
                 </form>
-                
-                <div class="text-center mt-3">
-                    <a href="/" class="text-decoration-none">← Вернуться на главную</a>
-                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/form-validation.js') }}"></script>
+<script src="{{ url_for('static', filename='js/register-form.js') }}"></script>
 {% endblock %}

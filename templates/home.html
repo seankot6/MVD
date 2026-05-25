@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Приём обращений граждан — МО МВД Октябрьский{% endblock %}
+
+{% block content %}
+<section class="hero-section mb-4">
+    <h1 class="hero-title h3 mb-3">Приём обращений граждан в МО МВД России по Октябрьскому району</h1>
+    <p class="secondary-text mb-0">
+        Электронная система для подачи обращений, отслеживания их статуса и взаимодействия
+        с межмуниципальным отделом МВД России по Октябрьскому району.
+    </p>
+</section>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="info-block">
+            <h5 class="mb-3">Как подать обращение</h5>
+            <ol class="secondary-text ps-3 mb-0">
+                <li class="mb-2">Нажмите «Подать обращение» и заполните форму.</li>
+                <li class="mb-2">Выберите категорию и опишите суть обращения.</li>
+                <li class="mb-2">При необходимости прикрепите документы.</li>
+                <li class="mb-2">Сохраните регистрационный номер для проверки статуса.</li>
+                <li>Для полного доступа зарегистрируйтесь в личном кабинете.</li>
+            </ol>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="info-block">
+            <h5 class="mb-3">Контакты МО МВД</h5>
+            <p class="mb-2"><strong>Адрес:</strong><br><span class="secondary-text">с. Екатеринославка, ул. Коммунальная, 57</span></p>
+            <p class="mb-2"><strong>Телефон:</strong><br><span class="secondary-text">+7 (416) 522-52-22</span></p>
+            <p class="mb-0"><strong>Режим работы:</strong><br><span class="secondary-text">Пн–Пт 09:00–18:00, обед 13:00–14:00</span></p>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="info-block d-flex flex-column justify-content-center h-100 home-actions">
+            <a href="{{ url_for('submit_appeal') }}" class="btn btn-primary btn-lg mb-3">Подать обращение</a>
+            <a href="{{ url_for('login') }}" class="btn btn-home-login btn-lg mb-3">Войти в личный кабинет</a>
+            <a href="{{ url_for('check_status') }}" class="btn btn-home-secondary btn-lg">Проверить статус обращения</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
