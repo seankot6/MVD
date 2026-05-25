@@ -108,6 +108,9 @@
         <a href="{{ url_for('login') }}" class="mobile-nav-item {% if request.endpoint == 'login' %}active{% endif %}">
             <span class="mobile-nav-label">Вход</span>
         </a>
+        <a href="{{ url_for('staff_login') }}" class="mobile-nav-item {% if request.endpoint == 'staff_login' %}active{% endif %}">
+            <span class="mobile-nav-label">Сотрудник</span>
+        </a>
         <a href="{{ url_for('register') }}" class="mobile-nav-item {% if request.endpoint == 'register' %}active{% endif %}">
             <span class="mobile-nav-label">Регистрация</span>
         </a>

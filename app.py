@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -52,18 +54,8 @@ os.makedirs(os.path.join(os.path.dirname(__file__), 'instance'), exist_ok=True)
 RECIPIENT_EMAIL = os.getenv('RECIPIENT_EMAIL', 'oktyabrsky28@gmail.com').strip().lower()
 STAFF_EMAILS = {'oktyabrsky28@gmail.com'}
 STAFF_SKIP_EMAIL_VERIFY = os.getenv('STAFF_SKIP_EMAIL_VERIFY', '0') == '1'
+STAFF_CODE_WINDOW_MINUTES = int(os.getenv('STAFF_CODE_WINDOW_MINUTES', '15'))
 PER_PAGE = 10
-
-
-def get_staff_access_code():
-    return os.getenv('STAFF_ACCESS_CODE', '').strip()
-
-
-def verify_staff_access_code(code):
-    expected = get_staff_access_code()
-    if not expected:
-        return False
-    return (code or '').strip() == expected
 MAX_APPEAL_TEXT = 5000
 SORT_COLUMNS = {
     'registration_number': Appeal.registration_number,
@@ -71,6 +63,63 @@ SORT_COLUMNS = {
     'status': Appeal.status,
     'category': Appeal.category,
 }
+
+
+def get_staff_code_secret():
+    return (
+        os.getenv('STAFF_CODE_SECRET', '').strip()
+        or os.getenv('ADMIN_RESET_KEY', '').strip()
+        or os.getenv('SECRET_KEY', '').strip()
+    )
+
+
+def staff_code_window_id(dt=None):
+    dt = dt or datetime.utcnow()
+    window_sec = max(5, STAFF_CODE_WINDOW_MINUTES) * 60
+    return int(dt.timestamp() // window_sec)
+
+
+def staff_code_for_window(window_id):
+    secret = get_staff_code_secret()
+    if not secret:
+        return ''
+    digest = hmac.new(
+        secret.encode(),
+        f'staff-mvd:{window_id}'.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return digest[:8].upper()
+
+
+def get_current_staff_access_code():
+    return staff_code_for_window(staff_code_window_id())
+
+
+def staff_code_seconds_left():
+    window_sec = max(5, STAFF_CODE_WINDOW_MINUTES) * 60
+    window_id = staff_code_window_id()
+    expires_at = (window_id + 1) * window_sec
+    return max(0, int(expires_at - datetime.utcnow().timestamp()))
+
+
+def staff_code_configured():
+    return bool(get_staff_code_secret() or os.getenv('STAFF_ACCESS_CODE', '').strip())
+
+
+def verify_staff_access_code(code):
+    normalized = (code or '').strip().upper()
+    if not normalized:
+        return False
+    static_code = os.getenv('STAFF_ACCESS_CODE', '').strip().upper()
+    if static_code and normalized == static_code:
+        return True
+    if not get_staff_code_secret():
+        return False
+    current = staff_code_window_id()
+    return normalized in (
+        staff_code_for_window(current),
+        staff_code_for_window(current - 1),
+    )
 
 
 @login_manager.user_loader
@@ -566,8 +615,8 @@ def register():
         try:
             if is_staff:
                 staff_code = request.form.get('staff_code', '').strip()
-                if not get_staff_access_code():
-                    flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
+                if not staff_code_configured():
+                    flash('Служебный код не настроен на сервере (STAFF_CODE_SECRET / ADMIN_RESET_KEY).', 'danger')
                     return redirect(url_for('register'))
                 if not verify_staff_access_code(staff_code):
                     flash('Неверный служебный код доступа сотрудника.', 'danger')
@@ -662,41 +711,59 @@ def login():
         login_value = request.form.get('login', '').strip()
         password = request.form.get('password', '')
         remember = request.form.get('remember') == 'on'
-        staff_mode = request.form.get('login_mode') == 'staff'
-        staff_code = request.form.get('staff_code', '').strip()
-
-        if staff_mode:
-            if not get_staff_access_code():
-                flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
-                return redirect(url_for('login'))
-            if not verify_staff_access_code(staff_code):
-                flash('Неверный служебный код доступа сотрудника.', 'danger')
-                return redirect(url_for('login'))
-
         user = find_user_by_login(login_value)
         if not user:
             flash('Аккаунт с таким email или телефоном не найден.', 'danger')
-        elif staff_mode and not user.is_staff:
-            flash('Этот аккаунт не зарегистрирован как сотрудник МО МВД.', 'danger')
+        elif user.is_staff:
+            flash('Для сотрудников — отдельная страница входа.', 'info')
+            return redirect(url_for('staff_login'))
         elif not user.check_password(password):
             flash('Неверный пароль. Попробуйте снова или восстановите пароль.', 'danger')
-        elif user.is_staff and not staff_mode:
-            flash('Для входа сотрудника выберите «Я сотрудник» и введите служебный код.', 'warning')
         else:
-            if user.is_staff and staff_mode and not user.email_verified:
-                user.email_verified = True
-                user.email_verify_code = None
-                user.email_verify_expires = None
-                db.session.commit()
-            elif user.is_staff and not user.email_verified and not staff_mode:
-                flash('Для входа сотрудника выберите «Я сотрудник» и введите служебный код.', 'warning')
-                return redirect(url_for('login'))
             login_user(user, remember=remember)
             next_url = request.args.get('next')
             if next_url:
                 return redirect(next_url)
             return redirect(home_url_for_user(user))
     return render_template('login.html')
+
+
+@app.route('/staff/login', methods=['GET', 'POST'])
+def staff_login():
+    if current_user.is_authenticated:
+        return redirect(home_url_for_user(current_user))
+    code_minutes_left = max(1, staff_code_seconds_left() // 60)
+    if request.method == 'POST':
+        login_value = request.form.get('login', '').strip()
+        password = request.form.get('password', '')
+        remember = request.form.get('remember') == 'on'
+        staff_code = request.form.get('staff_code', '').strip()
+        if not staff_code_configured():
+            flash('Служебный код не настроен на сервере.', 'danger')
+            return redirect(url_for('staff_login'))
+        if not verify_staff_access_code(staff_code):
+            flash('Неверный или устаревший код. Запросите актуальный у администратора.', 'danger')
+            return redirect(url_for('staff_login'))
+        user = find_user_by_login(login_value)
+        if not user:
+            flash('Аккаунт не найден.', 'danger')
+        elif not user.is_staff:
+            flash('Этот вход только для сотрудников МО МВД.', 'danger')
+        elif not user.check_password(password):
+            flash('Неверный пароль.', 'danger')
+        else:
+            if not user.email_verified:
+                user.email_verified = True
+                user.email_verify_code = None
+                user.email_verify_expires = None
+                db.session.commit()
+            login_user(user, remember=remember)
+            return redirect(url_for('staff_panel'))
+    return render_template(
+        'staff_login.html',
+        code_window_minutes=STAFF_CODE_WINDOW_MINUTES,
+        code_minutes_left=code_minutes_left,
+    )
 
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -911,6 +978,25 @@ def admin_test_email():
     if not ok and get_last_email_error():
         lines.append(f'Причина: {get_last_email_error()}')
     return '<br>'.join(lines), (200 if ok else 500)
+
+
+@app.route('/admin/staff-code')
+def admin_staff_code():
+    """Текущий служебный код (обновляется каждые N минут). Только для администратора."""
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key or request.args.get('key', '') != admin_key:
+        return 'Неверный ADMIN_RESET_KEY.', 403
+    if not get_staff_code_secret():
+        return 'Задайте ADMIN_RESET_KEY или STAFF_CODE_SECRET в Environment.', 400
+    code = get_current_staff_access_code()
+    left = staff_code_seconds_left()
+    mins, secs = divmod(left, 60)
+    return (
+        f'<p><strong>Код сотрудника (сейчас):</strong> <code style="font-size:1.4em">{code}</code></p>'
+        f'<p>Действует ещё: {mins} мин {secs} сек (окно {STAFF_CODE_WINDOW_MINUTES} мин).</p>'
+        f'<p>После истечения откройте эту страницу снова — код сменится.</p>'
+        f'<p><a href="{url_for("staff_login")}">Страница входа сотрудника</a></p>'
+    )
 
 
 @app.route('/admin/verify-staff-email')

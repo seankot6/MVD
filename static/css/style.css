@@ -498,6 +498,8 @@ h1, h2, h3, h4, h5, .text-primary {
 }
 
 #submit-btn:disabled,
+#appeal-submit-btn:disabled,
+#staff-login-btn:disabled,
 #login-submit-btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;

@@ -1,4 +1,20 @@
 document.addEventListener('DOMContentLoaded', function () {
+    var consent = document.getElementById('consent');
+    var submitBtn = document.getElementById('appeal-submit-btn');
+    if (consent && submitBtn) {
+        function updateSubmit() {
+            submitBtn.disabled = !consent.checked;
+        }
+        consent.addEventListener('change', updateSubmit);
+        updateSubmit();
+        document.getElementById('appeal-form').addEventListener('submit', function (e) {
+            if (!consent.checked) {
+                e.preventDefault();
+                alert('Отметьте согласие на обработку персональных данных.');
+            }
+        });
+    }
+
     var textarea = document.getElementById('appeal_text');
     var counter = document.getElementById('char-count');
     if (textarea && counter) {
