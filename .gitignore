@@ -1,7 +1,11 @@
 venv/
 .env
+.env.local
 __pycache__/
+**/__pycache__/
 *.pyc
 instance/
 uploads/*
 !uploads/.gitkeep
+*.db
+.DS_Store
