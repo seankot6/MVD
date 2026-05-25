@@ -1,5 +1,5 @@
-# Деплой на Render.com (бесплатный план) из репозитория GitHub
-# https://render.com — New → Blueprint → подключить репозиторий
+# Деплой на Render.com из GitHub: https://github.com/seankot6/MVD
+# Start Command: gunicorn -w 1 -b 0.0.0.0:$PORT wsgi:app
 
 services:
   - type: web
@@ -20,8 +20,22 @@ services:
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: SECRET_KEY
-        generateValue: true
+        sync: false
       - key: EMAIL_USER
         sync: false
       - key: EMAIL_PASS
+        sync: false
+      - key: RECIPIENT_EMAIL
+        sync: false
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: ADMIN_RESET_KEY
+        sync: false
+      - key: STAFF_CODE_WINDOW_MINUTES
+        value: "15"
+      - key: STAFF_SKIP_EMAIL_VERIFY
+        value: "1"
+      - key: STAFF_ACCESS_CODE
+        sync: false
+      - key: RESEND_API_KEY
         sync: false
