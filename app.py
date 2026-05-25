@@ -10,7 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from uuid import uuid4
 
-from flask import Flask, flash, redirect, render_template, request, send_from_directory, url_for
+from markupsafe import escape
 from flask_login import LoginManager, current_user, login_required, login_user, logout_user
 from functools import wraps
 from sqlalchemy import inspect, or_, text
@@ -122,7 +122,7 @@ def send_email(to_email, subject, body):
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
-        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587, timeout=20)
         server.starttls()
         server.login(email_user, email_pass)
         server.send_message(msg)
@@ -149,23 +149,25 @@ def generate_email_verify_code():
 
 
 def issue_email_verify_code(user):
+    """Сохраняет код в БД и отправляет письмо. Пользователь уже должен быть в базе."""
     user.email_verify_code = generate_email_verify_code()
     user.email_verify_expires = datetime.utcnow() + timedelta(minutes=15)
+    user.email_verified = False
     body = (
         f'Код подтверждения регистрации: {user.email_verify_code}\n\n'
         'Введите его на странице подтверждения email.\n'
         'Код действует 15 минут.'
     )
     try:
-        if not send_email(user.email, 'Код подтверждения — МО МВД Октябрьский', body):
-            db.session.rollback()
-            return False
         db.session.commit()
-        return True
     except Exception as e:
         db.session.rollback()
-        print('Ошибка сохранения кода подтверждения:', e)
+        print('Ошибка сохранения кода:', e)
         return False
+    if send_email(user.email, 'Код подтверждения — МО МВД Октябрьский', body):
+        return True
+    print('Письмо с кодом не отправлено на', user.email)
+    return False
 
 
 def optional_phone(phone):
@@ -184,6 +186,18 @@ def find_user_by_login(login_value):
         if user:
             return user
     return User.query.filter_by(email=login_value.lower()).first()
+
+
+def clear_all_data():
+    users = User.query.count()
+    appeals = Appeal.query.count()
+    AppealRating.query.delete()
+    AppealStatusHistory.query.delete()
+    AppealFile.query.delete()
+    Appeal.query.delete()
+    User.query.delete()
+    db.session.commit()
+    return users, appeals
 
 
 def migrate_db():
@@ -218,7 +232,7 @@ def migrate_db():
     db.session.execute(text("UPDATE user SET email = 'user' || id || '@legacy.local' WHERE email IS NULL OR TRIM(email) = ''"))
     db.session.execute(text("UPDATE user SET last_name = COALESCE(NULLIF(full_name, ''), 'Пользователь') WHERE last_name IS NULL OR last_name = ''"))
     db.session.execute(text("UPDATE user SET first_name = '' WHERE first_name IS NULL"))
-    db.session.execute(text("UPDATE user SET email_verified = 1"))
+    db.session.execute(text("UPDATE user SET email_verified = 1 WHERE role IS NULL OR role = '' OR role = 'citizen'"))
     db.session.execute(text("UPDATE user SET role = 'citizen' WHERE role IS NULL OR TRIM(role) = ''"))
     db.session.execute(text("UPDATE user SET role = 'staff' WHERE LOWER(email) = 'oktyabrsky28@gmail.com'"))
     db.session.execute(text("UPDATE appeal SET status = 'closed' WHERE status = 'completed'"))
@@ -426,9 +440,9 @@ def register():
             last_name=last_name,
             first_name=first_name,
             patronymic=patronymic or None,
-            phone=optional_phone(request.form.get('phone', '')) if not is_staff else '',
+            phone=optional_phone(request.form.get('phone', '')) if not is_staff else '—',
             address=(request.form.get('address', '').strip() or None) if not is_staff else None,
-            email_verified=not is_staff,
+            email_verified=False if is_staff else True,
             role='staff' if is_staff else 'citizen',
         )
         user.sync_full_name()
@@ -437,15 +451,16 @@ def register():
 
         try:
             if is_staff:
-                db.session.flush()
-                if not issue_email_verify_code(user):
+                db.session.commit()
+                email_sent = issue_email_verify_code(user)
+                if email_sent:
+                    flash('На ваш email отправлен 6-значный код. Введите его для завершения регистрации.', 'info')
+                else:
                     flash(
-                        'Не удалось завершить регистрацию. Проверьте EMAIL_USER и EMAIL_PASS '
-                        'в настройках Render (Environment) или попробуйте позже.',
-                        'danger',
+                        'Аккаунт создан, но письмо не ушло. На следующей странице нажмите '
+                        '«Отправить код повторно» или проверьте EMAIL_USER / EMAIL_PASS в Render → Environment.',
+                        'warning',
                     )
-                    return redirect(url_for('register'))
-                flash('На ваш email отправлен 6-значный код. Введите его для завершения регистрации.', 'info')
                 return redirect(url_for('register_verify', email=email))
 
             db.session.commit()
@@ -726,11 +741,51 @@ def download_file(file_id):
     return send_from_directory(app.config['UPLOAD_FOLDER'], file.stored_name, as_attachment=True, download_name=file.original_name)
 
 
+@app.route('/admin/clear-database', methods=['GET', 'POST'])
+def admin_clear_database():
+    """Очистка БД по секретному ключу (без платного Shell на Render)."""
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key:
+        return 'Сервис отключён: задайте ADMIN_RESET_KEY в Environment.', 404
+
+    provided = request.args.get('key', '') or request.form.get('key', '')
+    if provided != admin_key:
+        return 'Неверный ключ.', 403
+
+    if request.method == 'POST' and request.form.get('confirm') == 'yes':
+        users, appeals = clear_all_data()
+        flash(f'Удалено: {users} пользователей и {appeals} обращений.', 'success')
+        return redirect(url_for('index'))
+
+    return f'''
+    <!DOCTYPE html>
+    <html lang="ru"><head><meta charset="UTF-8"><title>Очистка базы</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head><body class="p-4"><div class="container" style="max-width:480px">
+    <h4>Очистить все аккаунты и обращения?</h4>
+    <p class="text-danger">Действие необратимо.</p>
+    <form method="POST">
+    <input type="hidden" name="key" value="{escape(provided)}">
+    <input type="hidden" name="confirm" value="yes">
+    <button type="submit" class="btn btn-danger">Да, удалить всё</button>
+    <a href="/" class="btn btn-secondary ms-2">Отмена</a>
+    </form></div></body></html>
+    '''
+
+
 with app.app_context():
     try:
         migrate_db()
     except Exception as e:
         print('Ошибка миграции БД:', e)
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    db.session.rollback()
+    print('Internal Server Error:', error)
+    flash('Внутренняя ошибка сервера. Попробуйте ещё раз или обратитесь к администратору.', 'danger')
+    return redirect(url_for('index')), 500
 
 
 if __name__ == '__main__':

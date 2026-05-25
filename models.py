@@ -56,7 +56,7 @@ class User(UserMixin, db.Model):
         return ' '.join(p for p in parts if p).strip() or (self.full_name or '')
 
     def sync_full_name(self):
-        self.full_name = self.fio
+        self.full_name = self.fio or f'{self.last_name} {self.first_name}'.strip() or 'Пользователь'
 
     @property
     def is_staff(self):
