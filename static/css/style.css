@@ -316,14 +316,24 @@ body {
 
 .mobile-nav-item {
     flex: 1;
+    min-width: 0;
     text-align: center;
     text-decoration: none;
     color: rgba(255, 255, 255, 0.75);
-    font-size: 0.72rem;
+    font-size: 0.62rem;
     font-weight: 600;
-    padding: 0.45rem 0.25rem;
+    padding: 0.4rem 0.15rem;
     border-radius: 6px;
-    margin: 0 0.15rem;
+    margin: 0 0.05rem;
+}
+
+.mobile-nav-item--logout {
+    color: rgba(255, 200, 200, 0.95);
+}
+
+.mobile-nav-item--logout:hover {
+    color: #fff;
+    background: rgba(220, 53, 69, 0.35);
 }
 
 .mobile-nav-item.active,
