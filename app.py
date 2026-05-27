@@ -177,6 +177,12 @@ def send_via_resend(to_email, subject, body):
     except HTTPError as e:
         detail = e.read().decode('utf-8', errors='replace')[:400]
         _LAST_EMAIL_ERROR = f'Resend {e.code}: {detail}'
+        if 'only send testing emails to your own email' in detail.lower():
+            _LAST_EMAIL_ERROR = (
+                'Resend (тестовый режим) позволяет отправлять только на email аккаунта Resend. '
+                f'Сейчас письмо шло на {to_email}. Подключите домен в Resend или укажите RECIPIENT_EMAIL '
+                'таким же, как email регистрации Resend.'
+            )
         print('Ошибка Resend:', _LAST_EMAIL_ERROR)
         return False
     except (URLError, TimeoutError, OSError) as e:
@@ -185,36 +191,57 @@ def send_via_resend(to_email, subject, body):
         return False
 
 
-def send_via_smtp(to_email, subject, body):
+def build_email_message(to_email, subject, body):
+    email_user = os.getenv('EMAIL_USER', '').strip()
+    msg = MIMEMultipart()
+    msg['From'] = email_user
+    msg['To'] = to_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    return msg
+
+
+def send_via_smtp_batch(messages):
+    """messages: [(to_email, subject, body), ...] — одно SMTP-подключение."""
     global _LAST_EMAIL_ERROR
     email_user = os.getenv('EMAIL_USER', '').strip()
     email_pass = os.getenv('EMAIL_PASS', '').strip()
     if not email_user or not email_pass:
         _LAST_EMAIL_ERROR = 'Не заданы EMAIL_USER или EMAIL_PASS'
-        return False
+        return [False] * len(messages)
+    if not messages:
+        return []
     try:
-        msg = MIMEMultipart()
-        msg['From'] = email_user
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
         smtp_host = os.getenv('SMTP_SERVER', 'smtp.gmail.com').strip()
-        server = smtplib.SMTP(smtp_host, 587, timeout=15)
+        server = smtplib.SMTP(smtp_host, 587, timeout=20)
         server.starttls()
         server.login(email_user, email_pass)
-        server.send_message(msg)
+        results = []
+        for to_email, subject, body in messages:
+            try:
+                server.send_message(build_email_message(to_email, subject, body))
+                results.append(True)
+            except Exception as e:
+                print(f'Ошибка SMTP для {to_email}:', e)
+                _LAST_EMAIL_ERROR = str(e)
+                results.append(False)
         server.quit()
-        return True
+        return results
     except Exception as e:
         err = str(e).lower()
         print('Ошибка SMTP:', e)
         if is_render_free_smtp_blocked() and ('timed out' in err or 'timeout' in err or '10060' in err):
             _LAST_EMAIL_ERROR = (
-                'Бесплатный Render блокирует Gmail SMTP. Добавьте RESEND_API_KEY или используйте admin/setup-staff.'
+                'Бесплатный Render блокирует Gmail SMTP. Добавьте RESEND_API_KEY в Environment на Render.'
             )
         else:
             _LAST_EMAIL_ERROR = str(e)
-        return False
+        return [False] * len(messages)
+
+
+def send_via_smtp(to_email, subject, body):
+    results = send_via_smtp_batch([(to_email, subject, body)])
+    return results[0] if results else False
 
 
 def send_email(to_email, subject, body):
@@ -227,6 +254,20 @@ def send_email(to_email, subject, body):
         print('Ошибка почты:', _LAST_EMAIL_ERROR)
         return False
     return send_via_smtp(to_email, subject, body)
+
+
+def send_emails(messages):
+    """Отправка нескольких писем. Возвращает список bool по порядку."""
+    global _LAST_EMAIL_ERROR
+    _LAST_EMAIL_ERROR = ''
+    if not messages:
+        return []
+    if os.getenv('RESEND_API_KEY', '').strip():
+        return [send_via_resend(to_email, subject, body) for to_email, subject, body in messages]
+    if not os.getenv('EMAIL_USER', '').strip() or not os.getenv('EMAIL_PASS', '').strip():
+        _LAST_EMAIL_ERROR = 'Не заданы EMAIL_USER или EMAIL_PASS'
+        return [False] * len(messages)
+    return send_via_smtp_batch(messages)
 
 
 def mask_email(email):
@@ -428,12 +469,12 @@ def send_appeal_notification(appeal):
     body = f"""Новое обращение {appeal.registration_number}
 Категория: {appeal.category_label}
 ФИО: {appeal.applicant_fio}
-Email: {appeal.email or '—'}
-Телефон: {appeal.phone or '—'}
+Email: {appeal.email or '-'}
+Телефон: {appeal.phone or '-'}
 
 {appeal.appeal_text}
 """
-    return send_email(RECIPIENT_EMAIL, f'Обращение {appeal.registration_number}', body)
+    return (RECIPIENT_EMAIL, f'Новое обращение {appeal.registration_number}', body)
 
 
 def send_applicant_confirmation(appeal):
@@ -443,20 +484,35 @@ def send_applicant_confirmation(appeal):
 
 Номер обращения: {appeal.registration_number}
 Категория: {appeal.category_label}
-Дата: {appeal.date_submitted.strftime('%d.%m.%Y %H:%M') if appeal.date_submitted else '—'}
+Дата: {appeal.date_submitted.strftime('%d.%m.%Y %H:%M') if appeal.date_submitted else '-'}
 
 Статус можно проверить на сайте в разделе «Проверить статус» или в личном кабинете.
 
 С уважением,
 МО МВД России по Октябрьскому району
 """
-    return send_email(appeal.email, f'Обращение {appeal.registration_number} принято', body)
+    return (appeal.email, f'Обращение {appeal.registration_number} принято', body)
 
 
 def notify_about_new_appeal(appeal):
     """Уведомляет сотрудника и заявителя. Возвращает (staff_ok, applicant_ok)."""
-    staff_ok = send_appeal_notification(appeal)
-    applicant_ok = send_applicant_confirmation(appeal)
+    messages = [send_appeal_notification(appeal)]
+    applicant_msg = send_applicant_confirmation(appeal)
+    if applicant_msg:
+        messages.append(applicant_msg)
+    results = send_emails(messages)
+    staff_ok = bool(results[0]) if results else False
+    applicant_ok = bool(results[1]) if len(results) > 1 else None
+    if not staff_ok:
+        print(
+            f'Письмо сотруднику ({RECIPIENT_EMAIL}) не отправлено для {appeal.registration_number}:',
+            get_last_email_error(),
+        )
+    if applicant_ok is False:
+        print(
+            f'Письмо заявителю ({appeal.email}) не отправлено для {appeal.registration_number}:',
+            get_last_email_error(),
+        )
     return staff_ok, applicant_ok
 
 
@@ -517,13 +573,13 @@ def submit_appeal():
         if not staff_ok:
             detail = get_last_email_error()
             flash(
-                'Обращение сохранено, но письмо сотруднику не отправилось. '
-                + (detail if detail else 'Проверьте настройки почты на сервере (EMAIL или Resend).'),
+                f'Обращение сохранено, но письмо сотруднику на {RECIPIENT_EMAIL} не отправилось. '
+                + (detail if detail else 'Проверьте настройки почты на сервере.'),
                 'warning',
             )
-        elif applicant_ok is False:
+        if applicant_ok is False:
             flash(
-                'Обращение принято, но письмо-подтверждение на ваш email не удалось отправить. '
+                'Письмо-подтверждение на ваш email не удалось отправить. '
                 'Проверьте адрес или папку «Спам».',
                 'warning',
             )
@@ -955,14 +1011,40 @@ def admin_test_email():
     admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
     if not admin_key or request.args.get('key', '') != admin_key:
         return 'Неверный ADMIN_RESET_KEY.', 403
-    to_addr = request.args.get('to', '').strip().lower() or os.getenv('EMAIL_USER', '').strip()
+    to_addr = request.args.get('to', '').strip().lower() or RECIPIENT_EMAIL
     if not to_addr:
-        return 'Укажите ?to=ваш@gmail.com', 400
+        return 'Укажите ?to=ваш@gmail.com или задайте RECIPIENT_EMAIL.', 400
     ok = send_email(to_addr, 'Тест — МО МВД', 'Если вы видите это письмо — отправка работает.')
     lines = [
         f'Отправка на {to_addr}: {"OK" if ok else "ОШИБКА"}',
+        f'RECIPIENT_EMAIL (куда идут обращения): {RECIPIENT_EMAIL}',
         f'RENDER free (SMTP заблокирован): {is_render_free_smtp_blocked()}',
         f'RESEND_API_KEY: {"да" if os.getenv("RESEND_API_KEY", "").strip() else "нет"}',
+    ]
+    if not ok and get_last_email_error():
+        lines.append(f'Причина: {get_last_email_error()}')
+    lines.append(f'<a href="{url_for("admin_test_appeal_email", key=admin_key)}">Тест письма об обращении</a>')
+    return '<br>'.join(lines), (200 if ok else 500)
+
+
+@app.route('/admin/test-appeal-email')
+def admin_test_appeal_email():
+    admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
+    if not admin_key or request.args.get('key', '') != admin_key:
+        return 'Неверный ADMIN_RESET_KEY.', 403
+    to_addr = request.args.get('to', '').strip().lower() or RECIPIENT_EMAIL
+    body = f"""Новое обращение ОБР-TEST-00001
+Категория: Тест
+ФИО: Тестовый пользователь
+Email: test@example.com
+Телефон: +79990000000
+
+Это тестовое письмо — так же выглядит уведомление о реальном обращении.
+"""
+    ok = send_email(to_addr, 'Новое обращение ОБР-TEST-00001', body)
+    lines = [
+        f'Тест уведомления об обращении на {to_addr}: {"OK" if ok else "ОШИБКА"}',
+        f'RECIPIENT_EMAIL: {RECIPIENT_EMAIL}',
     ]
     if not ok and get_last_email_error():
         lines.append(f'Причина: {get_last_email_error()}')
