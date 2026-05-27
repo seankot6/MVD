@@ -467,6 +467,41 @@ h1, h2, h3, h4, h5, .text-primary {
     box-shadow: 0 0 0 0.2rem rgba(0, 51, 102, 0.15);
 }
 
+.password-input-wrap {
+    position: relative;
+}
+
+.password-input-wrap .form-control {
+    padding-right: 2.75rem;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--mvd-gray);
+    padding: 0;
+    cursor: pointer;
+}
+
+.password-toggle-btn:hover,
+.password-toggle-btn:focus {
+    color: var(--mvd-blue);
+    outline: none;
+}
+
+.password-toggle-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
 .sortable-header a {
     display: block;
     padding: 0.25rem 0;

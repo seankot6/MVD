@@ -5,7 +5,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var submitBtn = document.getElementById('staff-login-btn');
 
     function updateBtn() {
-        var ok = codeInput.value.trim().length >= 4;
+        var ok = codeInput.value.trim().length >= 3;
         submitBtn.disabled = !ok;
     }
 

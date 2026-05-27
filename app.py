@@ -1,5 +1,3 @@
-import hashlib
-import hmac
 import json
 import os
 import random
@@ -54,7 +52,6 @@ os.makedirs(os.path.join(os.path.dirname(__file__), 'instance'), exist_ok=True)
 RECIPIENT_EMAIL = os.getenv('RECIPIENT_EMAIL', 'oktyabrsky28@gmail.com').strip().lower()
 STAFF_EMAILS = {'oktyabrsky28@gmail.com'}
 STAFF_SKIP_EMAIL_VERIFY = os.getenv('STAFF_SKIP_EMAIL_VERIFY', '0') == '1'
-STAFF_CODE_WINDOW_MINUTES = int(os.getenv('STAFF_CODE_WINDOW_MINUTES', '15'))
 PER_PAGE = 10
 MAX_APPEAL_TEXT = 5000
 SORT_COLUMNS = {
@@ -65,61 +62,19 @@ SORT_COLUMNS = {
 }
 
 
-def get_staff_code_secret():
-    return (
-        os.getenv('STAFF_CODE_SECRET', '').strip()
-        or os.getenv('ADMIN_RESET_KEY', '').strip()
-        or os.getenv('SECRET_KEY', '').strip()
-    )
-
-
-def staff_code_window_id(dt=None):
-    dt = dt or datetime.utcnow()
-    window_sec = max(5, STAFF_CODE_WINDOW_MINUTES) * 60
-    return int(dt.timestamp() // window_sec)
-
-
-def staff_code_for_window(window_id):
-    secret = get_staff_code_secret()
-    if not secret:
-        return ''
-    digest = hmac.new(
-        secret.encode(),
-        f'staff-mvd:{window_id}'.encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    return digest[:8].upper()
-
-
-def get_current_staff_access_code():
-    return staff_code_for_window(staff_code_window_id())
-
-
-def staff_code_seconds_left():
-    window_sec = max(5, STAFF_CODE_WINDOW_MINUTES) * 60
-    window_id = staff_code_window_id()
-    expires_at = (window_id + 1) * window_sec
-    return max(0, int(expires_at - datetime.utcnow().timestamp()))
+def get_staff_access_code():
+    return os.getenv('STAFF_ACCESS_CODE', '').strip().upper()
 
 
 def staff_code_configured():
-    return bool(get_staff_code_secret() or os.getenv('STAFF_ACCESS_CODE', '').strip())
+    return bool(get_staff_access_code())
 
 
 def verify_staff_access_code(code):
-    normalized = (code or '').strip().upper()
-    if not normalized:
+    static_code = get_staff_access_code()
+    if not static_code:
         return False
-    static_code = os.getenv('STAFF_ACCESS_CODE', '').strip().upper()
-    if static_code and normalized == static_code:
-        return True
-    if not get_staff_code_secret():
-        return False
-    current = staff_code_window_id()
-    return normalized in (
-        staff_code_for_window(current),
-        staff_code_for_window(current - 1),
-    )
+    return (code or '').strip().upper() == static_code
 
 
 @login_manager.user_loader
@@ -616,7 +571,7 @@ def register():
             if is_staff:
                 staff_code = request.form.get('staff_code', '').strip()
                 if not staff_code_configured():
-                    flash('Служебный код не настроен на сервере (STAFF_CODE_SECRET / ADMIN_RESET_KEY).', 'danger')
+                    flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
                     return redirect(url_for('register'))
                 if not verify_staff_access_code(staff_code):
                     flash('Неверный служебный код доступа сотрудника.', 'danger')
@@ -625,18 +580,20 @@ def register():
                 user.email_verify_code = None
                 user.email_verify_expires = None
                 db.session.commit()
-                flash('Регистрация сотрудника успешна. Войдите в панель обработки обращений.', 'success')
-                return redirect(url_for('login'))
+                login_user(user)
+                flash('Регистрация сотрудника успешна.', 'success')
+                return redirect(url_for('staff_panel'))
 
             db.session.commit()
+            login_user(user)
+            flash('Регистрация успешна.', 'success')
+            return redirect(home_url_for_user(user))
         except Exception as e:
             db.session.rollback()
             print('Ошибка регистрации:', e)
             flash('Ошибка при сохранении данных. Попробуйте ещё раз через минуту.', 'danger')
             return redirect(url_for('register'))
 
-        flash('Регистрация успешна. Войдите в личный кабинет.', 'success')
-        return redirect(url_for('login'))
     return render_template('register.html')
 
 
@@ -732,17 +689,16 @@ def login():
 def staff_login():
     if current_user.is_authenticated:
         return redirect(home_url_for_user(current_user))
-    code_minutes_left = max(1, staff_code_seconds_left() // 60)
     if request.method == 'POST':
         login_value = request.form.get('login', '').strip()
         password = request.form.get('password', '')
         remember = request.form.get('remember') == 'on'
         staff_code = request.form.get('staff_code', '').strip()
         if not staff_code_configured():
-            flash('Служебный код не настроен на сервере.', 'danger')
+            flash('Служебный код не настроен на сервере (STAFF_ACCESS_CODE).', 'danger')
             return redirect(url_for('staff_login'))
         if not verify_staff_access_code(staff_code):
-            flash('Неверный или устаревший код. Запросите актуальный у администратора.', 'danger')
+            flash('Неверный служебный код.', 'danger')
             return redirect(url_for('staff_login'))
         user = find_user_by_login(login_value)
         if not user:
@@ -759,11 +715,7 @@ def staff_login():
                 db.session.commit()
             login_user(user, remember=remember)
             return redirect(url_for('staff_panel'))
-    return render_template(
-        'staff_login.html',
-        code_window_minutes=STAFF_CODE_WINDOW_MINUTES,
-        code_minutes_left=code_minutes_left,
-    )
+    return render_template('staff_login.html')
 
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
@@ -982,19 +934,16 @@ def admin_test_email():
 
 @app.route('/admin/staff-code')
 def admin_staff_code():
-    """Текущий служебный код (обновляется каждые N минут). Только для администратора."""
+    """Служебный код для входа и регистрации сотрудника. Только для администратора."""
     admin_key = os.getenv('ADMIN_RESET_KEY', '').strip()
     if not admin_key or request.args.get('key', '') != admin_key:
         return 'Неверный ADMIN_RESET_KEY.', 403
-    if not get_staff_code_secret():
-        return 'Задайте ADMIN_RESET_KEY или STAFF_CODE_SECRET в Environment.', 400
-    code = get_current_staff_access_code()
-    left = staff_code_seconds_left()
-    mins, secs = divmod(left, 60)
+    code = get_staff_access_code()
+    if not code:
+        return 'Задайте STAFF_ACCESS_CODE в Environment.', 400
     return (
-        f'<p><strong>Код сотрудника (сейчас):</strong> <code style="font-size:1.4em">{code}</code></p>'
-        f'<p>Действует ещё: {mins} мин {secs} сек (окно {STAFF_CODE_WINDOW_MINUTES} мин).</p>'
-        f'<p>После истечения откройте эту страницу снова — код сменится.</p>'
+        f'<p><strong>Служебный код сотрудника:</strong> <code style="font-size:1.4em">{code}</code></p>'
+        f'<p>Код постоянный — используется при входе и регистрации сотрудника.</p>'
         f'<p><a href="{url_for("staff_login")}">Страница входа сотрудника</a></p>'
     )
 

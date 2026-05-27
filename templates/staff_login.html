@@ -9,15 +9,9 @@
             <div class="card-header text-white text-center"><h4 class="mb-0">Вход сотрудника МО МВД</h4></div>
             <div class="card-body p-4">
                 <div class="alert alert-light border mb-4">
-                    Служебный код <strong>обновляется каждые {{ code_window_minutes }} мин.</strong>
-                    Актуальный код выдаёт администратор (осталось около {{ code_minutes_left }} мин. до смены).
+                    Введите служебный email, пароль и код доступа. Код постоянный — его выдаёт администратор.
                 </div>
                 <form method="POST" id="staff-login-form" novalidate>
-                    <div class="staff-access-box mb-4">
-                        <label class="form-label fw-semibold">Служебный код <span class="text-danger">*</span></label>
-                        <input type="text" name="staff_code" id="staff_code" class="form-control text-uppercase"
-                               autocomplete="off" placeholder="8 символов" maxlength="12" required>
-                    </div>
                     <div class="mb-3">
                         <label class="form-label">Email <span class="text-danger">*</span></label>
                         <input type="email" name="login" class="form-control" required autocomplete="username"
@@ -26,6 +20,11 @@
                     <div class="mb-3">
                         <label class="form-label">Пароль <span class="text-danger">*</span></label>
                         <input type="password" name="password" class="form-control" required autocomplete="current-password">
+                    </div>
+                    <div class="staff-access-box mb-4">
+                        <label class="form-label fw-semibold">Код доступа сотрудника <span class="text-danger">*</span></label>
+                        <input type="text" name="staff_code" id="staff_code" class="form-control"
+                               autocomplete="off" placeholder="Код от администратора" required>
                     </div>
                     <div class="mb-4 form-check">
                         <input class="form-check-input" type="checkbox" name="remember" id="remember">
@@ -43,5 +42,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/staff-login-form.js') }}"></script>
+<script src="{{ url_for('static', filename='js/staff-login-form.js') }}?v=2"></script>
 {% endblock %}
