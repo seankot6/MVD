@@ -5,6 +5,9 @@ EMAIL_USER=...
 EMAIL_PASS=...
 RECIPIENT_EMAIL=oktyabrsky28@gmail.com
 SMTP_SERVER=smtp.gmail.com
+# На Render (бесплатный тариф) Gmail SMTP не работает — добавьте Resend:
+# RESEND_API_KEY=re_xxxxxxxx
+# RESEND_FROM=onboarding@resend.dev
 FLASK_ENV=production
 FLASK_DEBUG=0
 BEHIND_PROXY=1

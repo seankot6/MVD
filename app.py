@@ -436,6 +436,30 @@ Email: {appeal.email or '—'}
     return send_email(RECIPIENT_EMAIL, f'Обращение {appeal.registration_number}', body)
 
 
+def send_applicant_confirmation(appeal):
+    if not appeal.email or not is_valid_email(appeal.email):
+        return None
+    body = f"""Ваше обращение зарегистрировано в системе МО МВД по Октябрьскому району.
+
+Номер обращения: {appeal.registration_number}
+Категория: {appeal.category_label}
+Дата: {appeal.date_submitted.strftime('%d.%m.%Y %H:%M') if appeal.date_submitted else '—'}
+
+Статус можно проверить на сайте в разделе «Проверить статус» или в личном кабинете.
+
+С уважением,
+МО МВД России по Октябрьскому району
+"""
+    return send_email(appeal.email, f'Обращение {appeal.registration_number} принято', body)
+
+
+def notify_about_new_appeal(appeal):
+    """Уведомляет сотрудника и заявителя. Возвращает (staff_ok, applicant_ok)."""
+    staff_ok = send_appeal_notification(appeal)
+    applicant_ok = send_applicant_confirmation(appeal)
+    return staff_ok, applicant_ok
+
+
 NEWS_FILE = os.path.join(os.path.dirname(__file__), 'static', 'data', 'news.json')
 
 
@@ -488,8 +512,21 @@ def submit_appeal():
             form_data['email'] = current_user.email
 
         appeal = create_appeal_from_form(form_data, request.files.getlist('files'), current_user if current_user.is_authenticated else None)
-        send_appeal_notification(appeal)
+        staff_ok, applicant_ok = notify_about_new_appeal(appeal)
         flash(f'Обращение {appeal.registration_number} успешно отправлено.', 'success')
+        if not staff_ok:
+            detail = get_last_email_error()
+            flash(
+                'Обращение сохранено, но письмо сотруднику не отправилось. '
+                + (detail if detail else 'Проверьте настройки почты на сервере (EMAIL или Resend).'),
+                'warning',
+            )
+        elif applicant_ok is False:
+            flash(
+                'Обращение принято, но письмо-подтверждение на ваш email не удалось отправить. '
+                'Проверьте адрес или папку «Спам».',
+                'warning',
+            )
         return redirect(url_for('check_status', number=appeal.registration_number, email=appeal.email or ''))
 
     profile = current_user if current_user.is_authenticated else None
