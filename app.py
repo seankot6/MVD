@@ -138,6 +138,27 @@ def is_render_free_smtp_blocked():
         return False
     instance = os.getenv('RENDER_INSTANCE_TYPE', 'free').lower()
     return instance in ('', 'free')
+    return (
+        'Render блокирует исходящую почту через Gmail (SMTP). '
+        'В Render → Environment добавьте RESEND_API_KEY и RESEND_FROM, затем перезапустите сервис. '
+        'Инструкция: resend.com → API Keys → создать ключ.'
+    )
+
+
+def is_smtp_network_blocked_error(err_text):
+    err = (err_text or '').lower()
+    return any(
+        token in err
+        for token in (
+            'network is unreachable',
+            'errno 101',
+            'timed out',
+            'timeout',
+            '10060',
+            'connection refused',
+            'network unreachable',
+        )
+    )
 
 
 def email_configured():
