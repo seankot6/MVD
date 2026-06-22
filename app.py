@@ -589,21 +589,8 @@ def submit_appeal():
             form_data['email'] = current_user.email
 
         appeal = create_appeal_from_form(form_data, request.files.getlist('files'), current_user if current_user.is_authenticated else None)
-        staff_ok, applicant_ok = notify_about_new_appeal(appeal)
+        notify_about_new_appeal(appeal)
         flash(f'Обращение {appeal.registration_number} успешно отправлено.', 'success')
-        if not staff_ok:
-            detail = get_last_email_error()
-            flash(
-                f'Обращение сохранено, но письмо сотруднику на {RECIPIENT_EMAIL} не отправилось. '
-                + (detail if detail else 'Проверьте настройки почты на сервере.'),
-                'warning',
-            )
-        if applicant_ok is False:
-            flash(
-                'Письмо-подтверждение на ваш email не удалось отправить. '
-                'Проверьте адрес или папку «Спам».',
-                'warning',
-            )
         return redirect(url_for('check_status', number=appeal.registration_number, email=appeal.email or ''))
 
     profile = current_user if current_user.is_authenticated else None
