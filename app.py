@@ -138,8 +138,11 @@ def is_render_free_smtp_blocked():
         return False
     instance = os.getenv('RENDER_INSTANCE_TYPE', 'free').lower()
     return instance in ('', 'free')
+
+
+def render_smtp_blocked_message():
     return (
-        'Render блокирует исходящую почту через Gmail (SMTP). '
+        'Бесплатный Render блокирует исходящую почту через Gmail (SMTP). '
         'В Render → Environment добавьте RESEND_API_KEY и RESEND_FROM, затем перезапустите сервис. '
         'Инструкция: resend.com → API Keys → создать ключ.'
     )
@@ -232,6 +235,10 @@ def send_via_smtp_batch(messages):
         return [False] * len(messages)
     if not messages:
         return []
+    if is_render_free_smtp_blocked():
+        _LAST_EMAIL_ERROR = render_smtp_blocked_message()
+        print('Ошибка SMTP:', _LAST_EMAIL_ERROR)
+        return [False] * len(messages)
     try:
         smtp_host = os.getenv('SMTP_SERVER', 'smtp.gmail.com').strip()
         server = smtplib.SMTP(smtp_host, 587, timeout=20)
@@ -251,10 +258,8 @@ def send_via_smtp_batch(messages):
     except Exception as e:
         err = str(e).lower()
         print('Ошибка SMTP:', e)
-        if is_render_free_smtp_blocked() and ('timed out' in err or 'timeout' in err or '10060' in err):
-            _LAST_EMAIL_ERROR = (
-                'Бесплатный Render блокирует Gmail SMTP. Добавьте RESEND_API_KEY в Environment на Render.'
-            )
+        if is_render_free_smtp_blocked() and is_smtp_network_blocked_error(err):
+            _LAST_EMAIL_ERROR = render_smtp_blocked_message()
         else:
             _LAST_EMAIL_ERROR = str(e)
         return [False] * len(messages)
@@ -361,7 +366,12 @@ def clear_all_data():
 
 def migrate_db():
     inspector = inspect(db.engine)
-    if 'user' not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if 'user' not in table_names:
+        db.create_all()
+        return
+
+    if db.engine.dialect.name != 'sqlite':
         db.create_all()
         return
 
@@ -591,6 +601,10 @@ def submit_appeal():
         appeal = create_appeal_from_form(form_data, request.files.getlist('files'), current_user if current_user.is_authenticated else None)
         notify_about_new_appeal(appeal)
         flash(f'Обращение {appeal.registration_number} успешно отправлено.', 'success')
+        if current_user.is_authenticated:
+            if current_user.is_staff:
+                return redirect(url_for('staff_appeal_detail', appeal_id=appeal.id))
+            return redirect(url_for('appeal_detail', appeal_id=appeal.id))
         return redirect(url_for('check_status', number=appeal.registration_number, email=appeal.email or ''))
 
     profile = current_user if current_user.is_authenticated else None
@@ -608,8 +622,14 @@ def check_status():
         reg_number = reg_number.strip()
         email = email.strip().lower()
         appeal = Appeal.query.filter_by(registration_number=reg_number).first()
-        if appeal and appeal.email and appeal.email.lower() == email:
-            history = AppealStatusHistory.query.filter_by(appeal_id=appeal.id).order_by(AppealStatusHistory.changed_at.asc()).all()
+        if appeal:
+            if current_user.is_authenticated and can_access_appeal(appeal, current_user):
+                history = AppealStatusHistory.query.filter_by(appeal_id=appeal.id).order_by(AppealStatusHistory.changed_at.asc()).all()
+            elif appeal.email and appeal.email.lower() == email:
+                history = AppealStatusHistory.query.filter_by(appeal_id=appeal.id).order_by(AppealStatusHistory.changed_at.asc()).all()
+            elif request.method == 'POST':
+                flash('Обращение не найдено или email не совпадает.', 'danger')
+                appeal = None
         elif request.method == 'POST':
             flash('Обращение не найдено или email не совпадает.', 'danger')
             appeal = None

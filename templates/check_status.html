@@ -8,7 +8,11 @@
         <div class="card mb-4">
             <div class="card-header text-white"><h4 class="mb-0">Проверка статуса обращения</h4></div>
             <div class="card-body p-4">
+                {% if current_user.is_authenticated %}
+                <p class="secondary-text">Проверка по номеру и email. Вы вошли как <strong>{{ current_user.fio or current_user.email }}</strong> — полный доступ в <a href="{{ url_for('cabinet') }}">личном кабинете</a>.</p>
+                {% else %}
                 <p class="secondary-text">Для анонимных заявителей без личного кабинета.</p>
+                {% endif %}
                 <form method="POST">
                     <div class="mb-3">
                         <label class="form-label">Регистрационный номер <span class="text-danger">*</span></label>
@@ -45,10 +49,14 @@
                     </tbody>
                 </table>
                 {% endif %}
-                <p class="secondary-text mt-3 mb-0">Для полного доступа к документам и оценки качества рассмотрения зарегистрируйтесь в системе.</p>
+                {% if not current_user.is_authenticated %}
+                <p class="secondary-text mt-3 mb-0">Для полного доступа к документам и оценки качества рассмотрения <a href="{{ url_for('register') }}">зарегистрируйтесь</a> в системе.</p>
+                {% else %}
+                <p class="mt-3 mb-0"><a href="{{ url_for('appeal_detail', appeal_id=appeal.id) }}" class="btn btn-outline-primary btn-sm">Открыть в личном кабинете</a></p>
+                {% endif %}
             </div>
         </div>
         {% endif %}
     </div>
-</p>
+</div>
 {% endblock %}

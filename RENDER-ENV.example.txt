@@ -16,6 +16,9 @@ ADMIN_RESET_KEY=...
 STAFF_ACCESS_CODE=ваш-постоянный-код-сотрудника
 STAFF_SKIP_EMAIL_VERIFY=1
 
+# Постоянная база на Render (обязательно, иначе данные сбрасываются):
+# DATABASE_URL=postgresql://user:pass@host/dbname
+
 Start Command:
 gunicorn -w 1 -b 0.0.0.0:$PORT wsgi:app
 
